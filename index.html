@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EIC 2026 Fit Checker — Does your project qualify?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --blue:         #2F6BFF;
+  --blue-dark:    #1A4FCC;
+  --blue-light:   #EBF0FF;
+  --violet:       #534AB7;
+  --violet-dark:  #3C3489;
+  --violet-light: #EEEDFE;
+  --ink:          #0F172A;
+  --ink-2:        #334155;
+  --ink-3:        #64748B;
+  --surface:      #F8FAFC;
+  --white:        #FFFFFF;
+  --border:       #E2E8F0;
+  --border-2:     #CBD5E1;
+  --green-bg:     #F0FDF4;
+  --green-text:   #166534;
+  --green-border: #BBF7D0;
+  --red-bg:       #FFF1F2;
+  --red-text:     #9F1239;
+  --red-border:   #FECDD3;
+  --amber-bg:     #FFFBEB;
+  --amber-text:   #92400E;
+  --amber-border: #FDE68A;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 18px; --r-xl: 24px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--surface);
+  color: var(--ink);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Header */
+header {
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 0 2rem;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.logo { display: flex; align-items: center; gap: 9px; text-decoration: none; }
+
+.logo-mark {
+  width: 30px; height: 30px;
+  background: var(--violet);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.logo-text { font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; }
+.logo-text span { color: var(--violet); }
+
+.header-badge {
+  font-size: 11px; font-weight: 500;
+  color: var(--violet);
+  background: var(--violet-light);
+  border: 1px solid #CECBF6;
+  padding: 3px 11px; border-radius: 20px;
+  letter-spacing: 0.03em;
+}
+
+/* Main */
+main {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 4.5rem 1.5rem 3rem;
+}
+
+/* Hero */
+.hero {
+  background: linear-gradient(155deg, #EAF3FB 0%, #F5F0FF 55%, #EAF3FB 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 3.5rem 2.5rem 3rem;
+  text-align: center;
+  max-width: 640px; width: 100%;
+  margin-bottom: 2.5rem;
+  position: relative; overflow: hidden;
+  animation: fadeDown 0.5s ease both;
+}
+
+.hero::before {
+  content: ''; position: absolute; top: -70px; right: -70px;
+  width: 280px; height: 280px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(83,74,183,0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero::after {
+  content: ''; position: absolute; bottom: -50px; left: -50px;
+  width: 220px; height: 220px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(47,107,255,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+@keyframes fadeDown {
+  from { opacity: 0; transform: translateY(-14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.hero-badge {
+  display: inline-block;
+  background: rgba(83,74,183,0.1);
+  color: var(--violet-dark);
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 5px 14px; border-radius: 20px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #CECBF6;
+}
+
+.hero h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(2rem, 5vw, 2.9rem);
+  font-weight: 400; line-height: 1.12;
+  color: var(--ink); letter-spacing: -0.02em;
+  max-width: 520px; margin: 0 auto 1.25rem;
+}
+
+.hero h1 em { font-style: italic; color: var(--violet); }
+
+.hero p {
+  font-size: 15px; font-weight: 300;
+  color: var(--ink-3); line-height: 1.75;
+  max-width: 460px; margin: 0 auto 2rem;
+}
+
+.cta-hint {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; font-weight: 400; color: var(--ink-3);
+}
+
+.cta-hint svg { opacity: 0.5; animation: bounce 2s infinite; }
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(4px); }
+}
+
+.eu-stars {
+  display: flex; justify-content: center; gap: 5px;
+  margin-top: 1.75rem; opacity: 0.22;
+}
+.eu-star { font-size: 10px; color: var(--violet); }
+
+/* Card */
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 2.5rem;
+  width: 100%; max-width: 640px;
+  box-shadow: 0 4px 24px rgba(15,23,42,0.055), 0 1px 4px rgba(15,23,42,0.04);
+  animation: fadeUp 0.5s ease 0.1s both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.card-header {
+  margin-bottom: 2rem; padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 1rem;
+}
+
+.card-header-text h2 { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 3px; }
+.card-header-text p  { font-size: 13px; color: var(--ink-3); font-weight: 300; }
+
+.card-step {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--violet-light); color: var(--violet);
+  font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Form */
+.form-group { margin-bottom: 1.25rem; }
+
+label { display: block; font-size: 13px; font-weight: 500; color: var(--ink-2); margin-bottom: 7px; }
+label .req { color: var(--blue); margin-left: 2px; }
+
+input[type="text"], input[type="email"], input[type="tel"], textarea {
+  width: 100%; padding: 11px 14px;
+  border: 1.5px solid var(--border-2); border-radius: var(--r-md);
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 400;
+  color: var(--ink); background: var(--white); outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input[type="text"]::placeholder,
+input[type="email"]::placeholder,
+input[type="tel"]::placeholder,
+textarea::placeholder { color: var(--ink-3); font-weight: 300; }
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="tel"]:focus,
+textarea:focus { border-color: var(--violet); box-shadow: 0 0 0 3px rgba(83,74,183,0.12); }
+
+textarea { resize: vertical; min-height: 120px; line-height: 1.65; }
+
+.char-count {
+  font-size: 11px; color: var(--ink-3);
+  text-align: right; margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Button */
+.btn-submit {
+  width: 100%; padding: 14px 24px;
+  background: var(--violet); color: white;
+  font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
+  border: none; border-radius: var(--r-md);
+  cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background 0.18s, transform 0.15s, box-shadow 0.18s;
+  margin-top: 0.5rem; letter-spacing: -0.01em;
+}
+.btn-submit:hover:not(:disabled) { background: var(--violet-dark); box-shadow: 0 6px 20px rgba(83,74,183,0.28); transform: translateY(-1px); }
+.btn-submit:active:not(:disabled) { transform: scale(0.99); }
+.btn-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.form-note { font-size: 12px; color: var(--ink-3); text-align: center; margin-top: 12px; line-height: 1.55; font-weight: 300; }
+
+/* Messages */
+.message {
+  display: none; align-items: center; gap: 10px;
+  padding: 11px 15px; border-radius: var(--r-md);
+  font-size: 13px; line-height: 1.5;
+  margin-top: 1rem; animation: fadeUp 0.3s ease;
+}
+.message.visible { display: flex; }
+.msg-loading { background: var(--blue-light); color: var(--blue); border: 1px solid #BFDBFE; }
+.msg-error   { background: var(--red-bg); color: var(--red-text); border: 1px solid var(--red-border); }
+
+.spinner {
+  width: 15px; height: 15px;
+  border: 2px solid rgba(47,107,255,0.25);
+  border-top-color: var(--blue);
+  border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Result */
+.result-wrapper { display: none; width: 100%; max-width: 640px; margin-top: 1.5rem; animation: fadeUp 0.45s ease; }
+.result-wrapper.visible { display: block; }
+
+.result-card { border-radius: var(--r-xl); border: 1.5px solid; overflow: hidden; }
+.result-card.positive { border-color: var(--green-border); background: var(--green-bg); }
+.result-card.negative { border-color: var(--red-border);   background: var(--red-bg);   }
+.result-card.partial  { border-color: var(--amber-border); background: var(--amber-bg); }
+
+.result-top { padding: 1.5rem 2rem; display: flex; align-items: flex-start; gap: 14px; border-bottom: 1px solid; }
+.result-card.positive .result-top { border-color: var(--green-border); }
+.result-card.negative .result-top { border-color: var(--red-border);   }
+.result-card.partial  .result-top { border-color: var(--amber-border); }
+
+.result-icon {
+  width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; line-height: 1;
+}
+.result-card.positive .result-icon { background: #DCFCE7; }
+.result-card.negative .result-icon { background: #FFE4E6; }
+.result-card.partial  .result-icon { background: #FEF3C7; }
+
+.result-verdict {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.15rem; font-weight: 400; line-height: 1.3; margin-bottom: 2px;
+}
+.result-card.positive .result-verdict { color: var(--green-text); }
+.result-card.negative .result-verdict { color: var(--red-text);   }
+.result-card.partial  .result-verdict { color: var(--amber-text); }
+
+.result-sublabel { font-size: 12px; color: var(--ink-3); font-weight: 300; }
+
+.result-body { padding: 1.5rem 2rem; display: flex; flex-direction: column; gap: 1.25rem; }
+
+.result-row { display: flex; flex-direction: column; gap: 5px; }
+.result-row-label { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+
+.type-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 500; padding: 5px 13px;
+  border-radius: 20px; width: fit-content; border: 1px solid;
+}
+.result-card.positive .type-pill { background: #DCFCE7; color: #166534; border-color: #BBF7D0; }
+.result-card.negative .type-pill { background: #FFE4E6; color: #9F1239; border-color: #FECDD3; }
+.result-card.partial  .type-pill { background: #FEF3C7; color: #92400E; border-color: #FDE68A; }
+
+.result-comment { font-size: 14px; color: var(--ink-2); line-height: 1.8; font-weight: 300; }
+
+.result-footer {
+  padding: 1rem 2rem; border-top: 1px solid;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+}
+.result-card.positive .result-footer { border-color: var(--green-border); }
+.result-card.negative .result-footer { border-color: var(--red-border);   }
+.result-card.partial  .result-footer { border-color: var(--amber-border); }
+
+.result-footer-note { font-size: 12px; color: var(--ink-3); font-weight: 300; }
+
+.btn-reset {
+  font-size: 13px; font-weight: 500; color: var(--ink-2);
+  background: var(--white); border: 1.5px solid var(--border-2);
+  padding: 7px 16px; border-radius: var(--r-sm);
+  cursor: pointer; font-family: 'DM Sans', sans-serif; white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn-reset:hover { background: var(--violet-light); border-color: var(--violet); color: var(--violet); }
+
+/* Info strip */
+.info-strip {
+  width: 100%; max-width: 640px;
+  margin-top: 2rem;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); gap: 1rem;
+  animation: fadeUp 0.5s ease 0.2s both;
+}
+
+.info-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 1.25rem; display: flex; flex-direction: column; gap: 8px; }
+
+.info-card-stage { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 20px; width: fit-content; }
+.stage-early { background: #EAF3DE; color: #27500A; }
+.stage-mid   { background: var(--blue-light); color: var(--blue-dark); }
+.stage-scale { background: var(--violet-light); color: var(--violet-dark); }
+
+.info-card h3 { font-size: 13px; font-weight: 600; color: var(--ink); }
+.info-card p  { font-size: 12px; color: var(--ink-3); line-height: 1.5; font-weight: 300; }
+
+/* Footer */
+footer { background: var(--white); border-top: 1px solid var(--border); padding: 1.5rem 2rem; text-align: center; margin-top: auto; }
+footer p { font-size: 12px; color: var(--ink-3); font-weight: 300; line-height: 1.7; max-width: 640px; margin: 0 auto; }
+footer a { color: var(--violet); text-decoration: none; font-weight: 400; }
+footer a:hover { text-decoration: underline; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  main { padding: 2.5rem 1rem 2rem; }
+  .hero { padding: 2.5rem 1.5rem 2rem; border-radius: var(--r-lg); }
+  .card { padding: 1.75rem 1.25rem; }
+  .result-top    { padding: 1.25rem; }
+  .result-body   { padding: 1.25rem; }
+  .result-footer { padding: 0.875rem 1.25rem; flex-direction: column; align-items: flex-start; }
+  .hero h1 { font-size: 1.85rem; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="#" class="logo">
+    <div class="logo-mark">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M8 1.5L14 4.8V11.2L8 14.5L2 11.2V4.8L8 1.5Z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/>
+        <path d="M8 6V10M6 8H10" stroke="white" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <span class="logo-text">EIC<span>Fit</span></span>
+  </a>
+  <span class="header-badge">EIC 2026 work programme</span>
+</header>
+
+<main>
+
+  <div class="hero">
+    <div class="hero-badge">EIC Work Programme 2026</div>
+    <h1>Does your project fit<br>the <em>EIC 2026</em>?</h1>
+    <p>Enter your company name and a brief project description to get a preliminary assessment of its potential fit with the European Innovation Council Work Programme 2026.</p>
+    <div class="cta-hint">
+      Fill in the form below
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M7 2v10M3 8l4 4 4-4" stroke="#64748B" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div class="eu-stars">
+      <span class="eu-star">★</span><span class="eu-star">★</span><span class="eu-star">★</span>
+      <span class="eu-star">★</span><span class="eu-star">★</span><span class="eu-star">★</span>
+      <span class="eu-star">★</span><span class="eu-star">★</span><span class="eu-star">★</span>
+      <span class="eu-star">★</span><span class="eu-star">★</span><span class="eu-star">★</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-header-text">
+        <h2>Project details</h2>
+        <p>Fill in the required fields to start the analysis</p>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="company">Company name <span class="req">*</span></label>
+      <input type="text" id="company" placeholder="e.g. NovaTech Solutions" maxlength="120" autocomplete="organization" />
+    </div>
+
+    <div class="form-group">
+      <label for="contact-name">Contact name <span class="req">*</span></label>
+      <input type="text" id="contact-name" placeholder="e.g. María García" maxlength="120" autocomplete="name" />
+    </div>
+
+    <div class="form-group">
+      <label for="contact-email">Email<span class="req">*</span></label>
+      <input type="email" id="contact-email" placeholder="e.g. maria@company.com" maxlength="160" autocomplete="email" />
+    </div>
+
+    <div class="form-group">
+      <label for="contact-phone">Phone number<span class="req">*</span></label>
+      <input type="tel" id="contact-phone" placeholder="e.g. 909 64 159" maxlength="40" autocomplete="tel" />
+    </div>
+
+    <div class="form-group">
+      <label for="description">Project description <span class="req">*</span></label>
+      <textarea id="description" placeholder="Briefly describe your technology, innovation, target market and current development stage." maxlength="1200" oninput="updateCount()"></textarea>
+      <div class="char-count"><span id="char-count">0</span> / 1200</div>
+    </div>
+
+    <button class="btn-submit" id="submit-btn" onclick="handleSubmit()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M3 8h10M9 4l4 4-4 4" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Analyse EIC fit
+    </button>
+
+    <p class="form-note">This tool, developed by <a href="https://tlab.no/">T:lab</a> and <a href="https://inspiralia.com/">Inspiralia</a>, provides a preliminary assessment based on general information about the EIC Work Programme 2026. It does not constitute official advice and does not guarantee eligibility or funding. For official information, visit <a href="https://eic.ec.europa.eu">eic.ec.europa.eu</a>.</p>
+
+    <div class="message msg-loading" id="msg-loading">
+      <div class="spinner"></div>
+      Analysing your project…
+    </div>
+
+    <div class="message msg-error" id="msg-error">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style="flex-shrink:0">
+        <circle cx="7.5" cy="7.5" r="6" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M7.5 4.5V8M7.5 10.5h.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <span id="msg-error-text">We could not complete the analysis. Please try again in a few seconds.</span>
+    </div>
+  </div>
+
+  <div class="result-wrapper" id="result-wrapper">
+    <div class="result-card" id="result-card">
+      <div class="result-top">
+        <div class="result-icon" id="result-icon"></div>
+        <div>
+          <div class="result-verdict" id="result-verdict"></div>
+          <div class="result-sublabel">Assessment result · EIC 2026</div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="result-row">
+          <div class="result-row-label">Recommended instrument</div>
+          <div class="type-pill" id="type-pill">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+              <path d="M5.5 1L9.5 3.3V7.7L5.5 10L1.5 7.7V3.3L5.5 1Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+            </svg>
+            <span id="result-type-text"></span>
+          </div>
+        </div>
+        <div class="result-row">
+          <div class="result-row-label">Analysis &amp; comments</div>
+          <p class="result-comment" id="result-comment"></p>
+        </div>
+      </div>
+      <div class="result-footer">
+        <span class="result-footer-note">Preliminary assessment · Non-binding</span>
+        <button class="btn-reset" onclick="resetForm()">New assessment</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-strip">
+    <div class="info-card">
+      <span class="info-card-stage stage-early">Early stage</span>
+      <h3>EIC Pathfinder</h3>
+      <p>Advanced science-based research with transformative potential. TRL 1–4.</p>
+    </div>
+    <div class="info-card">
+      <span class="info-card-stage stage-mid">Transition</span>
+      <h3>EIC Transition</h3>
+      <p>Technology maturation with demonstrated concept viability. TRL 4–6.</p>
+    </div>
+    <div class="info-card">
+      <span class="info-card-stage stage-scale">Scale-up</span>
+      <h3>EIC Accelerator</h3>
+      <p>Innovative startups and SMEs ready to scale to global markets. TRL 6+.</p>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  <p>This tool provides a preliminary assessment based on general information about the EIC Work Programme 2026. It does not constitute official advice and does not guarantee eligibility or funding. For official information visit <a href="https://eic.ec.europa.eu" target="_blank" rel="noopener">eic.ec.europa.eu</a></p>
+</footer>
+
+<script>
+  const API_URL     = 'https://api.serenitystar.ai/api/v2/agent/EicPathfinderCopy/execute';
+  const API_KEY     = '127BEF01-A76C-4D4C-8041-7BE0E76D00DC';
+  const WEBHOOK_URL = 'https://n8n.srv1102294.hstgr.cloud/webhook/893b98a1-e556-4106-9de7-add4a2adba74';
+
+  function updateCount() {
+    document.getElementById('char-count').textContent =
+      document.getElementById('description').value.length;
+  }
+
+  function showMsg(id) {
+    ['msg-loading','msg-error'].forEach(m =>
+      document.getElementById(m).classList.remove('visible')
+    );
+    if (id) document.getElementById(id).classList.add('visible');
+  }
+
+  function setLoading(on) {
+    document.getElementById('submit-btn').disabled = on;
+    showMsg(on ? 'msg-loading' : null);
+  }
+
+  function showError(text) {
+    if (text) document.getElementById('msg-error-text').textContent = text;
+    showMsg('msg-error');
+  }
+
+  function resetForm() {
+    document.getElementById('company').value = '';
+    document.getElementById('description').value = '';
+    document.getElementById('contact-name').value = '';
+    document.getElementById('contact-email').value = '';
+    document.getElementById('contact-phone').value = '';
+    document.getElementById('char-count').textContent = '0';
+    document.getElementById('result-wrapper').classList.remove('visible');
+    showMsg(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => document.getElementById('company').focus(), 400);
+  }
+
+  function getState(fit) {
+    if (!fit) return 'partial';
+    const f = fit.toString().toLowerCase().trim();
+
+    if (f.startsWith('yes') || f.includes(' yes ') || f.includes('eligible') || f.includes('strong fit')) return 'positive';
+    if (f.startsWith('no') || f.includes('not eligible') || f.includes('does not fit') || f.includes('not applicable')) return 'negative';
+
+    if (['true','1','positive','fits','fit'].includes(f)) return 'positive';
+    if (['false','0','negative'].includes(f)) return 'negative';
+
+    return 'partial';
+  }
+
+  const STATES = {
+    positive: { icon: '✅', verdict: 'Your project could be a strong fit for EIC 2026', css: 'positive' },
+    negative: { icon: '❌', verdict: 'Your project does not appear to fit EIC 2026',     css: 'negative' },
+    partial:  { icon: '⚠️', verdict: 'Partial fit — further review recommended',         css: 'partial'  }
+  };
+
+  function tryParseJson(value) {
+    if (typeof value !== 'string') return value;
+
+    const text = value.trim();
+    if (!text) return value;
+
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      const first = text.indexOf('{');
+      const last = text.lastIndexOf('}');
+      if (first !== -1 && last !== -1 && last > first) {
+        try {
+          return JSON.parse(text.slice(first, last + 1));
+        } catch (e2) {}
+      }
+    }
+
+    return value;
+  }
+
+  function normalizeApiResponse(raw) {
+    console.log('[EICFit] Raw API response:', raw);
+
+    let result = raw;
+
+    if (Array.isArray(result)) result = result[0];
+
+    result = tryParseJson(result);
+    if (Array.isArray(result)) result = result[0];
+
+    const wrapperKeys = [
+      'output', 'result', 'response', 'data', 'answer', 'content',
+      'message', 'text', 'final', 'completion'
+    ];
+
+    let changed = true;
+    let guard = 0;
+
+    while (changed && guard < 10) {
+      changed = false;
+      guard += 1;
+
+      result = tryParseJson(result);
+      if (Array.isArray(result)) {
+        result = result[0];
+        changed = true;
+        continue;
+      }
+
+      if (result && typeof result === 'object') {
+        if ('Comments' in result || 'fit' in result || 'Type' in result) break;
+
+        for (const key of wrapperKeys) {
+          if (result[key] !== undefined) {
+            result = result[key];
+            changed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    result = tryParseJson(result);
+
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      result = {
+        Comments: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+        fit: 'partial',
+        Type: '—'
+      };
+    }
+
+    return {
+      Comments: result.Comments ?? result.comments ?? result.comment ?? result.analysis ?? result.Analysis ?? result.explanation ?? result.Explanation ?? '',
+      fit: result.fit ?? result.Fit ?? result.verdict ?? result.Verdict ?? result.eligible ?? result.Eligibility ?? '',
+      Type: result.Type ?? result.type ?? result.instrument ?? result.Instrument ?? result.recommended_instrument ?? result.RecommendedInstrument ?? '',
+      raw: result
+    };
+  }
+
+  // Sends form data + API result to the n8n webhook. Runs fire-and-forget.
+  async function sendToWebhook(formData, apiResult) {
+    const payload = {
+      submitted_at:    new Date().toISOString(),
+      form: {
+        company_name:    formData.company,
+        contact_name:    formData.contactName,
+        contact_email:   formData.contactEmail,
+        contact_phone:   formData.contactPhone,
+        project_description: formData.description
+      },
+      eic_assessment: {
+        fit:      apiResult.fit,
+        type:     apiResult.Type,
+        comments: apiResult.Comments,
+        raw:      apiResult.raw
+      }
+    };
+
+    try {
+      await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      console.log('[EICFit] Webhook sent successfully.');
+    } catch (err) {
+      // Silent fail — webhook errors do not affect the user experience
+      console.warn('[EICFit] Webhook delivery failed (non-blocking):', err);
+    }
+  }
+
+  function renderResult(data) {
+    console.log('[EICFit] Normalized result:', data);
+
+    const state = getState(data.fit);
+    const cfg   = STATES[state];
+    const card  = document.getElementById('result-card');
+    const wrap  = document.getElementById('result-wrapper');
+
+    card.classList.remove('positive','negative','partial');
+    card.classList.add(cfg.css);
+
+    document.getElementById('result-icon').textContent    = cfg.icon;
+    document.getElementById('result-verdict').textContent = cfg.verdict;
+    document.getElementById('result-type-text').textContent =
+      data.Type || (state === 'negative' ? 'Not applicable' : '—');
+
+    document.getElementById('result-comment').textContent =
+      data.Comments || JSON.stringify(data.raw || data, null, 2) || 'No additional comments were returned.';
+
+    wrap.classList.add('visible');
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function handleSubmit() {
+    const company      = document.getElementById('company').value.trim();
+    const contactName  = document.getElementById('contact-name').value.trim();
+    const contactEmail = document.getElementById('contact-email').value.trim();
+    const contactPhone = document.getElementById('contact-phone').value.trim();
+    const description  = document.getElementById('description').value.trim();
+
+    if (!company || !description) {
+      showError('Please fill in both the company name and the project description before continuing.');
+      return;
+    }
+    if (description.length < 15) {
+      showError('The description is too short. Please add a bit more detail to get a useful analysis.');
+      return;
+    }
+    if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+      showError('Please enter a valid email address, or leave the email field empty.');
+      return;
+    }
+
+    document.getElementById('result-wrapper').classList.remove('visible');
+    setLoading(true);
+
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-KEY': API_KEY
+        },
+        body: JSON.stringify([
+          { key: 'Company_Name',        value: company      },
+          { key: 'Company_Description', value: description  },
+          { key: 'Contact_Name',        value: contactName  },
+          { key: 'Contact_Email',       value: contactEmail },
+          { key: 'Contact_Phone',       value: contactPhone }
+        ])
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const raw    = await response.json();
+      const result = normalizeApiResponse(raw);
+
+      // Send everything to the n8n webhook (fire-and-forget)
+      sendToWebhook({ company, contactName, contactEmail, contactPhone, description }, result);
+
+      setLoading(false);
+      showMsg(null);
+      renderResult(result);
+
+    } catch (err) {
+      setLoading(false);
+      showError('We could not complete the analysis. Please try again in a few seconds.');
+      console.error('[EICFit]', err);
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleSubmit();
+  });
+</script>
+</body>
+</html>
