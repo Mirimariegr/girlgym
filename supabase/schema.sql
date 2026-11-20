@@ -140,7 +140,7 @@ grant execute on function public.find_friend_code(text) to authenticated;
 create table if not exists public.posts (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
-  kind       text not null check (kind in ('workout','badge','road','answer')),
+  kind       text not null check (kind in ('workout','badge','road','answer','post')),
   text       text check (char_length(text) <= 500),
   data       jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()
@@ -234,3 +234,18 @@ grant execute on function public.find_friend_code(text) to authenticated;
 alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
 alter default privileges in schema public grant usage, select on sequences to authenticated;
 notify pgrst, 'reload schema';
+
+-- ---------- Feed: fotos ----------
+-- 2) Fotos del feed: carpeta privada. Solo las ven tú y tus amigas aceptadas.
+insert into storage.buckets (id, name, public) values ('feed', 'feed', false) on conflict (id) do nothing;
+drop policy if exists "feed files select" on storage.objects;
+drop policy if exists "feed files insert" on storage.objects;
+drop policy if exists "feed files delete" on storage.objects;
+create policy "feed files select" on storage.objects for select to authenticated
+  using (bucket_id = 'feed' and ((storage.foldername(name))[1] = auth.uid()::text
+         or public.is_friend(auth.uid(), ((storage.foldername(name))[1])::uuid)));
+create policy "feed files insert" on storage.objects for insert to authenticated
+  with check (bucket_id = 'feed' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "feed files delete" on storage.objects for delete to authenticated
+  using (bucket_id = 'feed' and (storage.foldername(name))[1] = auth.uid()::text);
+

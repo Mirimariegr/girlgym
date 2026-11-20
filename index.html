@@ -503,7 +503,7 @@ function render(){
 function nav(){
   const b=(id,ic,l)=>`<button class="${ui.tab===id?'on':''}" data-a="tab" data-v="${id}"><span class="ic">${ic}</span>${l}</button>`;
   const n=socialBadge(), yo=['logros','datos','ajustes'].includes(ui.tab);
-  return `<nav class="bottom">${b('hoy','🏠','Hoy')}${b('plan','🗓️','Plan')}<button class="${ui.tab==='amigas'?'on':''}" data-a="tab" data-v="amigas" style="position:relative"><span class="ic">👯‍♀️</span>Amigas${n?`<span style="position:absolute;top:2px;right:14%;background:var(--pink);color:#fff;border-radius:99px;font-size:10px;min-width:18px;height:18px;line-height:18px;padding:0 4px">${n}</span>`:''}</button>${b('coach','💬','Coach')}<button class="${yo?'on':''}" data-a="tab" data-v="${ui.yoTab||'logros'}"><span class="ic">🌟</span>Yo</button></nav>`;
+  return `<nav class="bottom">${b('hoy','🏠','Hoy')}${b('plan','🗓️','Plan')}<button class="${ui.tab==='amigas'?'on':''}" data-a="tab" data-v="amigas" style="position:relative"><span class="ic">💞</span>Feed${n?`<span style="position:absolute;top:2px;right:14%;background:var(--pink);color:#fff;border-radius:99px;font-size:10px;min-width:18px;height:18px;line-height:18px;padding:0 4px">${n}</span>`:''}</button>${b('coach','💬','Coach')}<button class="${yo?'on':''}" data-a="tab" data-v="${ui.yoTab||'logros'}"><span class="ic">🌟</span>Yo</button></nav>`;
 }
 function header(title, sub){ const yo=['logros','datos','ajustes'].includes(ui.tab); return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="chip-xp">${USER?`<span id="syncDot" title="Nube">${syncIcon()}</span> `:''}✨ ${S.xp} XP</div></div>${yo?`<div class="seg" style="margin-bottom:14px"><button class="${ui.tab==='logros'?'on':''}" data-a="tab" data-v="logros">🏆 Logros</button><button class="${ui.tab==='datos'?'on':''}" data-a="tab" data-v="datos">📈 Progreso</button><button class="${ui.tab==='ajustes'?'on':''}" data-a="tab" data-v="ajustes">⚙️ Ajustes</button></div>`:''}`; }
 
@@ -621,7 +621,9 @@ async function loadSocial(){
     const pids=posts.map(p=>p.id), none={data:[]};
     const [rp,rc,ch]=await Promise.all([pids.length?SB.from('post_replies').select('*').in('post_id',pids).order('created_at'):none, pids.length?SB.from('post_reactions').select('*').in('post_id',pids):none,
       SB.from('cheers').select('*').eq('to_user',uid).order('created_at',{ascending:false}).limit(30)]);
-    ui.soc={me, friends, posts, replies:rp.data||[], reactions:rc.data||[], cheers:ch.data||[], loaded:true, err:false};
+    const imgs={}, paths=posts.map(p=>(p.data||{}).img).filter(Boolean);
+    if(paths.length){ const u=await SB.storage.from('feed').createSignedUrls(paths,3600); (u.data||[]).forEach((x,i)=>{ if(x&&x.signedUrl) imgs[paths[i]]=x.signedUrl; }); }
+    ui.soc={me, friends, posts, imgs, replies:rp.data||[], reactions:rc.data||[], cheers:ch.data||[], loaded:true, err:false};
     if(S.profile){ const nb=checkBadges(); nb.forEach(x=>{ toast(x.e+' Insignia: '+x.t); postActivity('badge','',{id:x.id}); }); if(nb.length) save(); }
   }catch(e){ console.warn('social',e); ui.soc={...(ui.soc||{}), loaded:true, err:true, errMsg:errText(e)}; }
   if(!S || S.active || $('.ov')) return;
@@ -633,13 +635,16 @@ async function postActivity(kind, text, data){
 }
 function postHtml(p){
   const w=who(p.user_id), d=p.data||{}; let body='';
-  if(p.kind==='workout') body=`💪 <b>${esc(w.name)}</b> ${w.me?'has':'ha'} completado <b>${esc(d.title||'un entreno')}</b>${d.min?` · ${d.min} min`:''}${d.prs?` · 🏆 ${d.prs} récord${d.prs>1?'s':''}`:''}`;
+  const img=d.img&&(ui.soc.imgs||{})[d.img];
+  const extra=`${p.text&&p.kind!=='answer'?`<div class="mt" style="font-size:16px;white-space:pre-wrap">${esc(p.text)}</div>`:''}${img?`<img src="${img}" alt="Foto de ${esc(w.name)}" loading="lazy" style="width:100%;border-radius:18px;margin-top:10px;display:block">`:''}`;
+  if(p.kind==='workout') body=`<b>${esc(w.name)}</b> ${w.me?'has':'ha'} entrenado 💪${extra}<div class="row mt" style="gap:6px;flex-wrap:wrap"><span class="pill pk">🏋️‍♀️ ${esc(d.title||'Entreno')}</span>${d.min?`<span class="pill">⏱️ ${d.min} min</span>`:''}${d.sets?`<span class="pill">✅ ${d.sets} series</span>`:''}${d.prs?`<span class="pill mn">🏆 ${d.prs} récord${d.prs>1?'s':''}</span>`:''}</div>`;
+  else if(p.kind==='post') body=`<b>${esc(w.name)}</b>${extra}`;
   else if(p.kind==='badge'){ const b=BADGES.find(x=>x.id===d.id)||{e:'🏅',t:'una insignia'}; body=`${b.e} <b>${esc(w.name)}</b> ${w.me?'has':'ha'} conseguido la insignia <b>${b.t}</b>`; }
   else if(p.kind==='road'){ const r=ROAD.find(x=>x.id===d.id)||{e:'✨',t:'un paso'}; body= d.id==='r8'?`👑 <b>¡${esc(w.name.toUpperCase())} ${w.me?'HAS':'HA'} HECHO SU PRIMERA DOMINADA!</b>`:`${r.e} <b>${esc(w.name)}</b> ${w.me?'avanzas':'avanza'} hacia la dominada: <b>${r.t}</b>`; }
   else if(p.kind==='answer') body=`<div class="tiny">${w.me?'TU RESPUESTA':esc(w.name.toUpperCase())+' RESPONDIÓ'} · ${esc(QUESTIONS[d.q]||'')}</div><div class="mt" style="font-size:16px">${esc(p.text||'')}</div>`;
   const rs=(ui.soc.reactions||[]).filter(r=>r.post_id===p.id), mine=rs.find(r=>r.user_id===USER.id), reps=(ui.soc.replies||[]).filter(r=>r.post_id===p.id), open=ui.openPost===p.id;
   return `<div class="card" style="padding:14px">
-    <div class="row" style="align-items:flex-start"><div class="emo" style="font-size:24px">${w.emoji}</div><div class="grow"><div>${body}</div><div class="tiny mt" style="margin-top:4px">${fmtAgo(p.created_at)}</div></div></div>
+    <div class="row" style="align-items:flex-start"><div class="emo" style="font-size:24px">${w.emoji}</div><div class="grow"><div>${body}</div><div class="tiny mt" style="margin-top:4px">${fmtAgo(p.created_at)}${w.me?` · <button class="link" style="font-size:12px;color:var(--ink-3)" data-a="delPost" data-v="${p.id}">Borrar</button>`:''}</div></div></div>
     <div class="row mt" style="gap:6px">${['💖','🔥','👏'].map(e=>{ const n=rs.filter(r=>r.emoji===e).length; return `<button class="pill ${mine&&mine.emoji===e?'pk':''}" style="padding:6px 10px;font-size:14px${mine&&mine.emoji===e?';outline:2px solid var(--pink)':''}" data-a="react" data-v="${p.id}" data-e="${e}">${e}${n?' '+n:''}</button>`; }).join('')}
       <button class="link" style="margin-left:auto;font-size:13px" data-a="openPost" data-v="${p.id}">💬 ${reps.length?reps.length+' ':''}Responder</button></div>
     ${reps.length||open?`<div style="margin-top:10px;padding-left:10px;border-left:3px solid var(--line)">${reps.map(r=>{ const x=who(r.user_id); return `<div style="padding:4px 0"><b>${x.emoji} ${esc(x.name)}</b> <span class="tiny">${fmtAgo(r.created_at)}</span><div>${esc(r.text)}</div></div>`; }).join('')}
@@ -653,31 +658,49 @@ function cheerBanner(){
     <div class="row mt" style="gap:8px"><button class="btn sm" data-a="readCheer" data-v="${c.id}">Gracias 💖</button><button class="btn sm ghost" data-a="cheerTo" data-v="${c.from_user}">Devolver ánimo</button>${more>0?`<span class="tiny">+${more} más</span>`:''}</div></div>`;
 }
 function viewAmigas(){
-  const s=ui.soc;
-  if(!SB||!USER) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card soft center"><span class="big-emo">👯‍♀️</span><h3>Entrena con tus amigas</h3><p class="muted">Cuando conectes tu cuenta podrás añadir amigas, ver sus logros, responder la pregunta de la semana y mandaros mensajes de ánimo.</p></div></div>`;
-  if(!s||!s.loaded) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card center"><span class="big-emo" style="animation:pulse 1.2s infinite">👯‍♀️</span><p class="muted">Cargando…</p></div></div>`;
-  if(s.err&&!s.me) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card center"><p class="muted">No he podido cargar tus amigas 📶</p>${s.errMsg?`<p class="tiny mt" style="word-break:break-word">Detalle: ${esc(s.errMsg)}</p>`:''}<button class="btn sm mt" data-a="socReload">Reintentar</button></div></div>`;
+  const s=ui.soc, H=header('Feed 💞','Tu gente GirlGym');
+  if(!SB||!USER) return `<div class="wrap">${H}<div class="card soft center"><span class="big-emo">💞</span><h3>Tu feed GirlGym</h3><p class="muted">Cuando conectes tu cuenta podrás publicar tus entrenos con foto, seguir a tus amigas y mandaros ánimo.</p></div></div>`;
+  if(!s||!s.loaded) return `<div class="wrap">${H}<div class="card center"><span class="big-emo" style="animation:pulse 1.2s infinite">💞</span><p class="muted">Cargando…</p></div></div>`;
+  if(s.err&&!s.me) return `<div class="wrap">${H}<div class="card center"><span class="big-emo">🙈</span><p class="muted">No he podido cargar el feed</p>${s.errMsg?`<p class="tiny mt" style="word-break:break-word;background:#FFF3F7;padding:10px;border-radius:12px;text-align:left">Detalle: ${esc(s.errMsg)}</p><p class="tiny mt">📸 Haz captura de esto y mándasela a quien te ayuda con la app</p>`:''}<button class="btn sm mt" data-a="socReload">Reintentar</button></div></div>`;
   const acc=s.friends.filter(f=>f.status==='accepted'), inc=s.friends.filter(f=>f.status==='pending'&&f.incoming), out=s.friends.filter(f=>f.status==='pending'&&!f.incoming);
   const wk=weekStart(Date.now()), qi=weekIdx()%QUESTIONS.length, myAns=s.posts.find(p=>p.kind==='answer'&&p.user_id===USER.id&&(p.data||{}).q===qi&&Date.parse(p.created_at)>=wk);
-  const ans=s.posts.filter(p=>p.kind==='answer'&&(p.data||{}).q===qi&&Date.parse(p.created_at)>=wk);
-  const feed=s.posts.filter(p=>!(p.kind==='answer'&&ans.includes(p)));
-  return `<div class="wrap">${header('Amigas 👯‍♀️','Más fuertes juntas')}
+  const open=!!ui.colOpen;
+  return `<div class="wrap">${H}
     ${cheerBanner()}
-    ${inc.map(f=>`<div class="card soft"><div class="row"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">Quiere ser tu amiga en GirlGym</div></div></div>
+    ${inc.map(f=>`<div class="card soft"><div class="row"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">Quiere seguirte en GirlGym</div></div></div>
       <div class="row mt" style="gap:8px"><button class="btn sm" data-a="acceptF" data-v="${f.fid}">Aceptar 💖</button><button class="btn sm ghost" data-a="removeF" data-v="${f.fid}">Ahora no</button></div></div>`).join('')}
-    <div class="card"><div class="row between"><div><div class="tiny">TU CÓDIGO DE AMIGA</div><div class="f" style="font-size:28px;letter-spacing:3px;color:var(--pink-d)">${s.me.code}</div></div><button class="emo" style="font-size:28px;width:52px;height:52px" data-a="avatar" aria-label="Cambiar avatar">${s.me.emoji}</button></div>
-      <div class="row mt" style="gap:8px"><button class="btn sm lila" data-a="shareCode">📤 Invitar amiga</button><button class="btn sm ghost" data-a="addFriend">＋ Añadir con código</button></div></div>
-    ${acc.length?`<div class="card"><h3>Mis amigas</h3>${acc.map(f=>{ const n=s.posts.filter(p=>p.user_id===f.id&&p.kind==='workout'&&Date.parse(p.created_at)>=wk).length; return `<div class="item"><button class="emo" data-a="friendMenu" data-v="${f.fid}" aria-label="Opciones de ${esc(f.name)}">${f.emoji}</button><div class="grow" data-a="friendMenu" data-v="${f.fid}" style="cursor:pointer"><div class="name">${esc(f.name)} <span class="tiny">⋯</span></div><div class="tiny">${n?`💪 ${n} entreno${n>1?'s':''} esta semana`:'Aún sin entrenos esta semana'}</div></div><button class="btn sm" data-a="cheerTo" data-v="${f.id}">💌 Ánimo</button></div>`; }).join('')}
-      ${out.map(f=>`<div class="item"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">⏳ Solicitud enviada</div></div><button class="btn sm ghost" data-a="cancelF" data-v="${f.fid}">Cancelar</button></div>`).join('')}</div>`
-    :`<div class="card soft center"><span class="big-emo">💌</span><p class="muted">Invita a tus amigas con tu código y os iréis animando 💖</p></div>${out.length?`<div class="card"><h3>Solicitudes enviadas</h3>${out.map(f=>`<div class="item"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">⏳ Solicitud enviada</div></div><button class="btn sm ghost" data-a="cancelF" data-v="${f.fid}">Cancelar</button></div>`).join('')}</div>`:''}`}
-    <div class="card" style="background:linear-gradient(135deg,#FF7DB4,#C49BFF);color:#fff"><div class="tiny" style="color:#fff">PREGUNTA DE LA SEMANA</div><h2 style="margin-top:4px">${curQ()}</h2>
+    <button class="card row" style="width:100%;text-align:left;gap:12px" data-a="compose"><div class="emo" style="font-size:24px">${s.me.emoji}</div><div class="grow muted">¿Qué quieres compartir hoy? ✨</div><span class="btn sm">📸</span></button>
+    <div class="card" style="padding:14px"><div class="row between" data-a="toggleCol" style="cursor:pointer"><div><div class="name">👯‍♀️ Mis GirlGym colleagues · ${acc.length}</div><div class="tiny">Tu código: <b style="color:var(--pink-d);letter-spacing:1px">${s.me.code}</b> · <span style="color:var(--pink-d)">${open?'Ocultar ▴':'Gestionar ▾'}</span></div></div><div class="row" style="gap:-6px">${acc.slice(0,4).map(f=>`<span style="font-size:22px">${f.emoji}</span>`).join('')}</div></div>
+      ${open?`<div class="row mt" style="gap:8px;flex-wrap:wrap"><button class="btn sm lila" data-a="shareCode">📤 Invitar</button><button class="btn sm ghost" data-a="addFriend">＋ Añadir con código</button><button class="btn sm ghost" data-a="avatar">${s.me.emoji} Mi avatar</button></div>
+      ${acc.map(f=>{ const n=s.posts.filter(p=>p.user_id===f.id&&p.kind==='workout'&&Date.parse(p.created_at)>=wk).length; return `<div class="item"><button class="emo" data-a="friendMenu" data-v="${f.fid}" aria-label="Opciones de ${esc(f.name)}">${f.emoji}</button><div class="grow" data-a="friendMenu" data-v="${f.fid}" style="cursor:pointer"><div class="name">${esc(f.name)} <span class="tiny">⋯</span></div><div class="tiny">${n?`💪 ${n} entreno${n>1?'s':''} esta semana`:'Aún sin entrenos esta semana'}</div></div><button class="btn sm" data-a="cheerTo" data-v="${f.id}">💌</button></div>`; }).join('')}
+      ${out.map(f=>`<div class="item"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">⏳ Solicitud enviada</div></div><button class="btn sm ghost" data-a="cancelF" data-v="${f.fid}">Cancelar</button></div>`).join('')}
+      ${!acc.length&&!out.length?'<p class="muted mt">Invita a tus amigas con tu código y os iréis animando 💖</p>':''}`:''}</div>
+    <div class="card" style="background:linear-gradient(135deg,#FF7DB4,#C49BFF);color:#fff"><div class="tiny" style="color:#fff">PREGUNTA DE LA SEMANA</div><h3 style="margin-top:4px;font-size:18px">${curQ()}</h3>
       ${myAns?`<p class="mt" style="opacity:.95">Tu respuesta: <b>${esc(myAns.text)}</b></p>`:`<form id="answerForm" class="row mt" style="gap:6px"><input class="field" name="t" placeholder="Tu respuesta…" maxlength="300" autocomplete="off"><button class="btn sm white" type="submit">➤</button></form>`}</div>
-    ${ans.map(postHtml).join('')}
-    <div class="row between mt2" style="margin-bottom:10px"><h3 style="margin:0">Actividad</h3><button class="link" data-a="socReload">↻ Actualizar</button></div>
-    ${feed.length?feed.map(postHtml).join(''):'<p class="muted center">Aquí verás los entrenos y logros de tus amigas ✨</p>'}
-    <div class="card mt2"><div class="row between"><div class="grow"><div class="name">Compartir mi actividad</div><div class="tiny">Entrenos, insignias y pasos hacia la dominada. Tu ciclo y tus fotos nunca se comparten 🔒</div></div>
-      <div class="seg" style="width:120px"><button class="${S.social.share?'on':''}" data-a="shareAct" data-v="1">Sí</button><button class="${!S.social.share?'on':''}" data-a="shareAct" data-v="0">No</button></div></div></div>
+    <div class="row between mt2" style="margin-bottom:10px"><h3 style="margin:0">Feed</h3><button class="link" data-a="socReload">↻ Actualizar</button></div>
+    ${s.posts.length?s.posts.map(postHtml).join(''):'<p class="muted center">Aquí saldrán tus publicaciones y las de tus colleagues ✨</p>'}
   </div>`;
+}
+function composer(wo){
+  ui.comp={wo:wo||null, img:null};
+  modal(`${wo?`<span class="big-emo">📣</span><h2 class="center">¡A presumir! 💖</h2>`:`<h2>Nueva publicación ✨</h2>`}
+    ${wo?`<div class="row mt" style="gap:6px;flex-wrap:wrap;justify-content:center"><span class="pill pk">🏋️‍♀️ ${esc(wo.title)}</span><span class="pill">⏱️ ${wo.min} min</span><span class="pill">✅ ${wo.sets} series</span>${wo.prs?`<span class="pill mn">🏆 ${wo.prs}</span>`:''}</div>`:''}
+    <textarea class="field mt2" id="compText" rows="3" maxlength="500" placeholder="${wo?'¿Cómo te has sentido? (ej: ¡hoy me he colgado 30 s! 🙌)':'Escribe algo para tus colleagues…'}" style="resize:none;font-family:inherit"></textarea>
+    <div id="compImg" class="mt"></div>
+    <button class="btn ghost mt" data-a="compPhoto">📸 Añadir foto</button>
+    <button class="btn mt" data-a="compPost">Publicar 💞</button>
+    <p class="tiny center mt">Solo lo verán tus GirlGym colleagues 🔒</p>`);
+}
+async function publishComposer(btn){
+  const c=ui.comp, text=($('#compText')?.value||'').trim();
+  if(!c.wo && !text && !c.img){ toast('Escribe algo o añade una foto ✨'); return; }
+  btn.disabled=true; btn.textContent='Publicando…';
+  try{
+    const id=uuid(), data=c.wo?{...c.wo}:{};
+    if(c.img){ const path=`${USER.id}/${id}.jpg`, blob=await (await fetch(c.img)).blob(); const up=await SB.storage.from('feed').upload(path, blob, {contentType:'image/jpeg'}); if(up.error) throw up.error; data.img=path; }
+    const r=await SB.from('posts').insert({id, user_id:USER.id, kind:c.wo?'workout':'post', text:text||null, data}); if(r.error) throw r.error;
+    closeModal(); confetti(30); addXP(15); save(); toast('💞 ¡Publicado! +15 XP'); ui.tab='amigas'; ui.soc={...(ui.soc||{}),loaded:false}; render(); loadSocial();
+  }catch(e){ console.warn(e); btn.disabled=false; btn.textContent='Publicar 💞'; toast('⚠️ No se pudo publicar: '+errText(e).slice(0,80)); }
 }
 function cheerModal(id){
   const w=who(id);
@@ -913,7 +936,7 @@ function viewAjustes(){
       <div class="row mt" style="gap:8px"><input class="field" id="vidIn" placeholder="https://youtube.com/..." inputmode="url" autocomplete="off" style="flex:1"><button class="btn sm" data-a="addVid">＋</button></div>
       ${(S.videos||[]).map((v,i)=>`<div class="item"><img src="https://i.ytimg.com/vi/${v.id}/default.jpg" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:10px"><div class="grow name">Vídeo ${i+1}</div><button class="x" data-a="delVid" data-v="${v.id}">✕</button></div>`).join('')}
     </div>
-    <div class="card"><h3>👯‍♀️ Amigas</h3><div class="row between"><div class="grow"><div class="name">Compartir mi actividad</div><div class="tiny">Tu ciclo y tus fotos nunca se comparten 🔒</div></div>
+    <div class="card"><h3>💞 Feed</h3><div class="row between"><div class="grow"><div class="name">Publicar mis logros automáticamente</div><div class="tiny">Insignias y pasos hacia la dominada. Tu ciclo y tus fotos de progreso nunca se comparten 🔒</div></div>
       <div class="seg" style="width:120px"><button class="${S.social.share?'on':''}" data-a="shareAct" data-v="1">Sí</button><button class="${!S.social.share?'on':''}" data-a="shareAct" data-v="0">No</button></div></div></div>
   </div>`;
 }
@@ -1041,18 +1064,20 @@ function finishWorkout(){
   const xp=sets*10+50+w.prs.length*30; w.xp=xp; addXP(xp);
   const L0=level(S.xp-xp).l;
   S.workouts.push(w); S.active=null;
-  postActivity('workout','',{title:A.title.replace(/ · (5 min 🌱|suave 🌸)$/,''), min:Math.round(dur(w)/60000), sets, prs:w.prs.length});
+  ui.lastWo={title:A.title.replace(/ · (5 min 🌱|suave 🌸)$/,''), min:Math.round(dur(w)/60000), sets, prs:w.prs.length};
   const res=sweep(true), L1=level(S.xp);
   const items=[
     ...w.prs.map(p=>`🏆 Récord en ${esc(ex(p.exId).name)}: <b>${p.v} ${unit(ex(p.exId).kind)}</b>`),
     ...res.r.map(r=>`${r.e} Camino: <b>${r.t}</b>`), ...(res.c?[`🎯 Reto: <b>${res.c.t}</b>`]:[]),
     ...res.b.map(b=>`${b.e} Insignia: <b>${b.t}</b>`), ...(L1.l>L0?[`🆙 ¡Subes a nivel ${L1.l+1}: <b>${L1.name}</b>!`]:[])];
   ui.tab='hoy'; render();
-  modal(`<span class="big-emo">🎉</span><h2 class="center">¡Entreno completado!</h2>
+  modal(`<span class="big-emo">🎉</span><h2 class="center" style="font-size:26px">¡SÚPER BUEN TRABAJO! 💖</h2>
     <div class="grid3 mt2"><div class="stat center"><div class="v">${fmtT(dur(w))}</div><div class="k">TIEMPO</div></div><div class="stat center"><div class="v">${sets}</div><div class="k">SERIES</div></div><div class="stat center"><div class="v">+${xp}</div><div class="k">XP</div></div></div>
     ${items.length?`<div class="card soft mt2">${items.map(i=>`<div style="padding:4px 0">${i}</div>`).join('')}</div>`:''}
     <p class="muted center mt">${['Cada serie te acerca a tu dominada 💖','Constancia > perfección ✨','Tu yo del futuro te lo agradece 🌸','Eres más fuerte que ayer 🦋'][sets%4]}</p>
-    <button class="btn mt2" data-a="close">¡Genial! 💖</button>`);
+    ${SB&&USER?`<div class="card mt2 center" style="background:linear-gradient(135deg,#FF7DB4,#C49BFF);color:#fff;margin-bottom:0"><div class="name" style="font-size:17px">Anima a tus GirlGym colleagues 👯‍♀️</div><div class="tiny" style="color:#fff">Comparte tu entreno con una foto y un mensaje</div>
+      <button class="btn white mt" data-a="postWo">📸 Publicar mi entreno</button></div><button class="link" style="display:block;margin:14px auto 0;color:var(--ink-3)" data-a="close">Ahora no</button>`
+      :`<button class="btn mt2" data-a="close">¡Genial! 💖</button>`}`);
   confetti(60); buzz([60,40,60]);
 }
 
@@ -1150,6 +1175,18 @@ const A = {
   ciEnergy:el=>{ ui.ci.energy=el.dataset.v; if(el.dataset.v==='low' || ui.ci.sym.length>=2){ ui.ci.step=2; ciRender(); } else A.ciGo({dataset:{v:'normal'}}); },
   ciGo:el=>{ const c=ui.ci; startWorkout(c.day, {...c.o, energy:c.energy||null, symptoms:c.sym, soft:c.o.soft||el.dataset.v==='soft'}); },
   meh:()=>mehModal(),
+  compose:()=>composer(null),
+  postWo:()=>composer(ui.lastWo),
+  toggleCol:()=>{ ui.colOpen=!ui.colOpen; render(); },
+  compPhoto:()=>{ const i=document.createElement('input'); i.type='file'; i.accept='image/*';
+    i.onchange=()=>{ const f=i.files[0]; if(!f) return; const img=new Image(), url=URL.createObjectURL(f);
+      img.onload=()=>{ const M=1080, sc=Math.min(1,M/Math.max(img.width,img.height)), c=document.createElement('canvas'); c.width=img.width*sc; c.height=img.height*sc; c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
+        ui.comp.img=c.toDataURL('image/jpeg',.82); const box=$('#compImg'); if(box) box.innerHTML=`<div style="position:relative"><img src="${ui.comp.img}" alt="" style="width:100%;border-radius:18px;display:block"><button class="x" style="position:absolute;top:8px;right:8px;background:#fff" data-a="compNoPhoto">✕</button></div>`; };
+      img.src=url; }; i.click(); },
+  compNoPhoto:()=>{ ui.comp.img=null; const box=$('#compImg'); if(box) box.innerHTML=''; },
+  compPost:el=>publishComposer(el),
+  delPost:async el=>{ if(!confirm('¿Borrar esta publicación?')) return; const p=ui.soc.posts.find(x=>x.id===el.dataset.v); const r=await SB.from('posts').delete().eq('id',el.dataset.v); if(r.error){ toast('⚠️ No se pudo borrar'); return; }
+    if(p&&p.data&&p.data.img) SB.storage.from('feed').remove([p.data.img]); ui.soc.posts=ui.soc.posts.filter(x=>x.id!==el.dataset.v); render(); },
   toggleDayCard:el=>{ ui.openDays=ui.openDays||{}; ui.openDays[el.dataset.v]=!ui.openDays[el.dataset.v]; render(); },
   exVideo:el=>exVideoModal(el.dataset.id),
   saveExVid:el=>{ const id=ytId($('#exVidIn')?.value||''); if(!id){ toast('Pega un enlace de YouTube 🎬'); return; } ex(el.dataset.id).video=id; save(); exVideoModal(el.dataset.id); toast('🎥 ¡Vídeo guardado para este ejercicio!'); },
