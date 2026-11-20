@@ -23,10 +23,12 @@ create table if not exists public.workouts (
   prs        jsonb not null default '[]'::jsonb,
   xp         int not null default 0,
   paused_ms  bigint not null default 0,  -- tiempo en pausa (ms)
+  meta       jsonb not null default '{}'::jsonb,  -- energía, síntomas, modo suave, día y fase del ciclo
   created_at timestamptz not null default now(),
   primary key (user_id, id)
 );
 alter table public.workouts add column if not exists paused_ms bigint not null default 0;
+alter table public.workouts add column if not exists meta jsonb not null default '{}'::jsonb;
 create index if not exists workouts_user_started on public.workouts (user_id, started_at);
 
 -- Fotos de antes / después (el archivo va al bucket privado "photos")
@@ -75,6 +77,9 @@ select
   round((extract(epoch from ended_at - started_at) * 1000 - paused_ms) / 60000) as minutos,
   round(paused_ms / 60000.0)                                     as minutos_pausa,
   title as entreno,
+  meta->>'energy'   as energia,
+  meta->>'phase'    as fase_ciclo,
+  (meta->>'cycleDay')::int as dia_ciclo,
   xp
 from public.workouts
 order by started_at desc;

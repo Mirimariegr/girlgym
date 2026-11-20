@@ -235,6 +235,45 @@ const ROAD = [
   {id:'r8', e:'👑', t:'¡TU PRIMERA DOMINADA!',              ex:'pull', v:1,  tip:'Barbilla por encima de la barra. Eres imparable.'},
 ];
 
+// Fases del ciclo: consejos suaves. La evidencia dice que cada mujer es distinta → sugerencias, nunca reglas.
+const PHASES = {
+  menstrual:{e:'🩸', n:'Regla', tips:[
+    'Si te apetece, movimiento suave: colgarte, movilidad o caminar. Si no, descansar también es entrenar 💖',
+    'Muchas mujeres rinden igual estos días. Escucha a tu cuerpo, no al calendario.',
+    'Moverte un poco y el calor en la tripa pueden aliviar el dolor de regla.',
+    'Legumbres, carne o espinacas (con un chorrito de limón) te ayudan a reponer hierro.']},
+  folicular:{e:'🌱', n:'Fase folicular', tips:[
+    'Muchas mujeres notan más energía en esta fase: buen momento para probar a subir peso 💪',
+    '¿Y si hoy intentas una negativa más que la última vez?',
+    'Buena fase para aprender técnica nueva: tu cuerpo suele recuperarse bien.',
+    'Aprovecha si te sientes con chispa, pero sin forzar: la constancia gana ✨']},
+  ovulatoria:{e:'🌕', n:'Ovulación', tips:[
+    'Para muchas, energía alta: ¡día ideal para intentar un récord! 🏆',
+    'Calienta bien hombros y muñecas antes de cargar peso.',
+    'Si te sientes fuerte, prueba a colgarte unos segundos más que tu récord.',
+    'Disfruta la energía: hoy puede ser un gran entreno 🌟']},
+  lutea:{e:'🌙', n:'Fase lútea', tips:[
+    'Puede que notes más cansancio o calor: bebe un poquito más de agua 💧',
+    'Si cuesta más, mantén el peso en vez de subirlo. Sigue contando igual 💖',
+    '¿Antojo de dulce? Normal. Un snack con proteína (yogur, frutos secos) ayuda.',
+    'Dormir un poco más estos días marca la diferencia 😴']},
+  tarde:{e:'⏳', n:'Regla a punto', tips:[
+    'Tu regla podría llegar en cualquier momento. Cuando venga, márcala con 🩸',
+    'Retrasos de unos días son normales (estrés, sueño, viajes…).']},
+};
+// Mujeres que inspiran (la búsqueda abre sus vídeos en YouTube)
+const WOMEN = [
+  {e:'🏋️‍♀️', n:'Lydia Valentín',  s:'Halterofilia · España', t:'De Camponaraya (León) a tres medallas olímpicas levantando pesas. La fuerza se construye repetición a repetición.', q:'Lydia Valentín halterofilia'},
+  {e:'🏸', n:'Carolina Marín',   s:'Bádminton · España',    t:'Campeona olímpica en Río 2016. Se ha roto la rodilla varias veces y siempre ha vuelto a pelear.', q:'Carolina Marín motivación'},
+  {e:'⚽', n:'Alexia Putellas',  s:'Fútbol · España',       t:'Dos Balones de Oro. Se rompió el ligamento cruzado justo antes de una Eurocopa y volvió al máximo nivel.', q:'Alexia Putellas vuelta lesión'},
+  {e:'🤸‍♀️', n:'Simone Biles',    s:'Gimnasia · EE. UU.',    t:'En Tokio 2020 paró para cuidar su salud mental. En París 2024 volvió y ganó tres oros. Parar también es de valientes.', q:'Simone Biles comeback'},
+  {e:'🏊‍♀️', n:'Teresa Perales',  s:'Natación paralímpica · España', t:'Perdió la movilidad de las piernas a los 19 años y se convirtió en una de las deportistas paralímpicas con más medallas de la historia.', q:'Teresa Perales'},
+  {e:'🎾', n:'Serena Williams',  s:'Tenis · EE. UU.',       t:'Ganó el Open de Australia 2017 estando embarazada. Una de las mejores deportistas de todos los tiempos.', q:'Serena Williams motivation'},
+  {e:'🦘', n:'Ana Peleteiro',    s:'Triple salto · España', t:'Bronce olímpico en Tokio 2020, y volvió a competir después de ser madre.', q:'Ana Peleteiro'},
+  {e:'🏊‍♀️', n:'Mireia Belmonte', s:'Natación · España',     t:'Campeona olímpica de 200 m mariposa en Río 2016 tras años de entrenar antes de que saliera el sol.', q:'Mireia Belmonte oro Río'},
+];
+const SYMPTOMS = ['Dolor de regla','Hinchazón','Dormí mal','Estrés','Dolor de cabeza','Cansancio'];
+
 const LEVELS = ['Semillita 🌱','Florecita 🌸','Mariposa 🦋','Estrellita ⭐','Cometa 💫','Fuego 🔥','Diamante 💎','Reina del gym 👑'];
 
 const CHALLENGES = [
@@ -269,6 +308,8 @@ const BADGES = [
   {id:'road4',  e:'🦋', t:'Mitad del camino'},
   {id:'pullup', e:'👑', t:'¡DOMINADA!'},
   {id:'pullup5',e:'💎', t:'5 dominadas'},
+  {id:'soft',   e:'🌸', t:'Escuché a mi cuerpo'},
+  {id:'period', e:'🩸', t:'Entrené con la regla'},
 ];
 
 /* ---------- estado ---------- */
@@ -277,7 +318,7 @@ let USER = null;   // usuaria de Supabase
 const ui = {tab:'hoy', chartEx:null, holdT:null, restEnd:0, onb:0, onbData:{name:'',days:[1,3,5],lvl:0}, booting:true, sync:'ok', auth:{mode:'login',email:'',name:'',busy:false,err:'',msg:''}};
 let photosThisWeek = 0;
 
-function fresh(){ return {v:1, profile:null, exercises:JSON.parse(JSON.stringify(DEFAULT_EX)), plan:{}, workouts:[], xp:0, badges:{}, road:{}, challenges:{}, active:null, restSec:90, _t:0, _del:[]}; }
+function fresh(){ return {v:1, profile:null, exercises:JSON.parse(JSON.stringify(DEFAULT_EX)), plan:{}, workouts:[], xp:0, badges:{}, road:{}, challenges:{}, active:null, restSec:90, _t:0, _del:[], cycle:{on:false,asked:false,hormonal:false,len:28,plen:5,periods:[]}, videos:[], rest:{}}; }
 const storeKey = () => USER ? KEY+':'+USER.id : KEY+':local';
 function load(){ try{ const s = JSON.parse(localStorage.getItem(storeKey())); if(s && s.v) return Object.assign(fresh(), s); }catch(e){} return fresh(); }
 function legacy(){ for(const k of [KEY, KEY+':local']){ try{ const s=JSON.parse(localStorage.getItem(k)); if(s && s.profile) return {k,s}; }catch(e){} } return null; }
@@ -289,8 +330,8 @@ const CFG = window.GLOWFIT_CONFIG || {};
 const CLOUD = !!(CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase);
 const SB = CLOUD ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
 const appUrl = () => location.origin + location.pathname;
-const toRow = (w,uid) => ({id:w.id, user_id:uid, started_at:new Date(w.start).toISOString(), ended_at:new Date(w.end).toISOString(), title:w.title, day:w.day, entries:w.entries, prs:w.prs||[], xp:w.xp||0, paused_ms:w.pausedMs||0});
-const fromRow = r => ({id:r.id, start:Date.parse(r.started_at), end:Date.parse(r.ended_at), title:r.title, day:r.day, entries:r.entries||[], prs:r.prs||[], xp:r.xp||0, pausedMs:r.paused_ms||0, _s:true});
+const toRow = (w,uid) => ({id:w.id, user_id:uid, started_at:new Date(w.start).toISOString(), ended_at:new Date(w.end).toISOString(), title:w.title, day:w.day, entries:w.entries, prs:w.prs||[], xp:w.xp||0, paused_ms:w.pausedMs||0, meta:w.meta||{}});
+const fromRow = r => ({id:r.id, start:Date.parse(r.started_at), end:Date.parse(r.ended_at), title:r.title, day:r.day, entries:r.entries||[], prs:r.prs||[], xp:r.xp||0, pausedMs:r.paused_ms||0, meta:r.meta||{}, _s:true});
 const syncIcon = () => ({ok:'☁️', pending:'⏳', error:'⚠️'})[ui.sync];
 const syncLabel = () => ({ok:'☁️ Todo guardado en la nube', pending:'⏳ Guardando en la nube…', error:'⚠️ Sin conexión: se guardará en cuanto vuelva internet'})[ui.sync];
 function setSync(v){ ui.sync=v; const d=$('#syncDot'); if(d) d.textContent=syncIcon(); const l=$('#syncLabel'); if(l) l.textContent=syncLabel(); }
@@ -377,6 +418,18 @@ const fmtMin = ms => { const m=Math.round(ms/60000); return m<60? m+' min' : Mat
 const fmtD = t => new Date(t).toLocaleDateString('es-ES',{day:'numeric',month:'short'});
 const dur = w => Math.max(0, w.end - w.start - (w.pausedMs||0));   // tiempo real entrenando (sin pausas)
 const activeMs = A => Date.now() - A.start - (A.pausedMs||0) - (A.pausedAt ? Date.now()-A.pausedAt : 0);
+const dayKey = t => { const d=new Date(t); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const parseDay = k => { const [y,m,d]=k.split('-').map(Number); return new Date(y,m-1,d).getTime(); };
+const startDay = t => { const d=new Date(t); d.setHours(0,0,0,0); return d.getTime(); };
+function cyc(){ if(!S.cycle) S.cycle={on:false,asked:false,hormonal:false,len:28,plen:5,periods:[]}; return S.cycle; }
+function cycleLen(){ const c=cyc(), ps=[...c.periods].sort(), g=[]; for(let i=1;i<ps.length;i++){ const d=Math.round((parseDay(ps[i])-parseDay(ps[i-1]))/864e5); if(d>=18&&d<=60) g.push(d); } const r=g.slice(-6); return r.length? Math.round(r.reduce((a,b)=>a+b,0)/r.length) : c.len; }
+function cycleInfo(t=Date.now()){
+  const c=cyc(); if(!c.on || c.hormonal || !c.periods.length) return null;
+  const last=[...c.periods].sort().reverse().find(k=>parseDay(k)<=startDay(t)); if(!last) return null;
+  const day=Math.round((startDay(t)-parseDay(last))/864e5)+1, len=cycleLen(), ov=len-14;
+  const ph = day<=c.plen?'menstrual' : day<ov-1?'folicular' : day<=ov+1?'ovulatoria' : day<=len?'lutea' : 'tarde';
+  return {day, len, ph, next:len-day+1};
+}
 const fmtH = t => new Date(t).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
 const unit = k => k==='weight'?'kg':k==='time'?'s':'reps';
 function weekStart(d){ d=new Date(d); d.setHours(0,0,0,0); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.getTime(); }
@@ -410,7 +463,7 @@ function buzz(p){ try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} }
 function checkRoad(){ const got=[]; for(const r of ROAD){ if(S.road[r.id]) continue; if(bestOf(r.ex)>=r.v){ S.road[r.id]=Date.now(); addXP(150); got.push(r); } } return got; }
 function earnedBadges(){
   const W=S.workouts, n=W.length, prs=W.reduce((a,w)=>a+(w.prs||[]).length,0), st=streak(), hrs=W.reduce((a,w)=>a+dur(w),0)/36e5, vol=W.reduce((a,w)=>a+volume(w),0), ch=Object.values(S.challenges).filter(c=>c.done).length, roadN=Object.keys(S.road).length;
-  return {first:n>=1,w5:n>=5,w10:n>=10,w25:n>=25,w50:n>=50,pr1:prs>=1,pr10:prs>=10,streak3:st>=3,streak8:st>=8,hours5:hrs>=5,ton:vol>=10000,photo:photoCount>0,ch1:ch>=1,ch5:ch>=5,hang60:bestOf('hang')>=60,road4:roadN>=4,pullup:!!S.road.r8||bestOf('pull')>=1,pullup5:bestOf('pull')>=5};
+  return {first:n>=1,w5:n>=5,w10:n>=10,w25:n>=25,w50:n>=50,pr1:prs>=1,pr10:prs>=10,streak3:st>=3,streak8:st>=8,hours5:hrs>=5,ton:vol>=10000,soft:W.some(w=>w.meta&&w.meta.soft),period:W.some(w=>w.meta&&w.meta.phase==='menstrual'),photo:photoCount>0,ch1:ch>=1,ch5:ch>=5,hang60:bestOf('hang')>=60,road4:roadN>=4,pullup:!!S.road.r8||bestOf('pull')>=1,pullup5:bestOf('pull')>=5};
 }
 function checkBadges(){ const e=earnedBadges(), got=[]; for(const b of BADGES){ if(e[b.id] && !S.badges[b.id]){ S.badges[b.id]=Date.now(); addXP(100); got.push(b);} } return got; }
 function curChallenge(){ const k=weekKey(Date.now()); return S.challenges[k]; }
@@ -437,6 +490,70 @@ function nav(){
   return `<nav class="bottom">${b('hoy','🏠','Hoy')}${b('plan','🗓️','Mi plan')}${b('logros','🏆','Logros')}${b('datos','📈','Progreso')}</nav>`;
 }
 function header(title, sub){ const L=level(S.xp); return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="chip-xp">${USER?`<span id="syncDot" title="Nube">${syncIcon()}</span> `:''}✨ ${S.xp} XP</div></div>`; }
+
+/* ---------- Check-in de energía ---------- */
+function checkin(day, o={}){ ui.ci={day, sym:[], step:1, o}; ciRender(); }
+function ciRender(){
+  const c=ui.ci, inf=cycleInfo();
+  if(c.step===2) return modal(`<span class="big-emo">🌸</span><h2 class="center">¿Modo suave hoy?</h2>
+    <p class="muted center">Hacemos 1 serie menos por ejercicio y no te pido subir peso. Suma XP igual y no rompe tu racha 💖</p>
+    <button class="btn mt2" data-a="ciGo" data-v="soft">🌸 Sí, modo suave</button>
+    <button class="btn ghost mt" data-a="ciGo" data-v="normal">💪 No, entreno normal</button>`);
+  modal(`<h2 class="center">¿Cómo va tu energía hoy?</h2>
+    ${inf?`<p class="center mt"><span class="pill pk">${PHASES[inf.ph].e} Día ${inf.day} · ${PHASES[inf.ph].n}</span></p>`:''}
+    <div class="grid3 mt2">${[['low','😴','Bajita'],['ok','🙂','Normal'],['high','⚡','¡A tope!']].map(x=>`<button class="opt" style="flex-direction:column;margin:0;padding:16px 6px" data-a="ciEnergy" data-v="${x[0]}"><span style="font-size:38px">${x[1]}</span><span class="name">${x[2]}</span></button>`).join('')}</div>
+    <p class="tiny mt2">¿ALGO MÁS? (OPCIONAL)</p>
+    <div class="row mt" style="flex-wrap:wrap;gap:8px">${SYMPTOMS.map(x=>`<button class="pill ${c.sym.includes(x)?'pk':''}" style="padding:8px 12px;font-size:13px${c.sym.includes(x)?';outline:2px solid var(--pink)':''}" data-a="ciSym" data-v="${x}">${x}</button>`).join('')}</div>
+    <button class="link mt2" style="display:block;margin:18px auto 0;color:var(--ink-3)" data-a="ciGo" data-v="skip">Saltar y empezar</button>`);
+}
+
+/* ---------- "Hoy no me apetece" ---------- */
+const ytId = u => { const m=String(u).match(/(?:youtu\.be\/|[?&]v=|shorts\/|embed\/|live\/)([\w-]{11})/); return m?m[1]:null; };
+function mehModal(){
+  ui.wi=((ui.wi??Math.floor(Math.random()*WOMEN.length))+1)%WOMEN.length;
+  const w=WOMEN[ui.wi], vids=S.videos||[], v=vids.length?vids[Math.floor(Math.random()*vids.length)]:null;
+  modal(`<h2>Te entiendo 💖</h2><p class="muted">Nos pasa a todas. Mira esto un momentito:</p>
+    ${v?`<div class="mt" style="aspect-ratio:16/9;border-radius:18px;overflow:hidden;background:#000"><iframe width="100%" height="100%" style="border:0" src="https://www.youtube-nocookie.com/embed/${v.id}" title="Vídeo de motivación" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>`:''}
+    <div class="card soft mt"><div class="row"><span style="font-size:36px">${w.e}</span><div class="grow"><div class="name">${w.n}</div><div class="tiny">${w.s}</div></div></div>
+      <p class="mt">${w.t}</p>
+      <div class="row mt between"><a class="btn sm lila" href="https://www.youtube.com/results?search_query=${encodeURIComponent(w.q)}" target="_blank" rel="noopener">▶ Ver sus vídeos</a><button class="link" data-a="meh">Otra mujer 🔄</button></div></div>
+    <p class="tiny mt2">¿QUÉ TE APETECE HACER?</p>
+    <button class="opt" data-a="mehGo" data-v="mini"><span style="font-size:28px">🌱</span><div><div class="name">Solo 5 minutos</div><div class="tiny">Si luego quieres parar, paras. Trato hecho.</div></div></button>
+    <button class="opt" data-a="mehGo" data-v="soft"><span style="font-size:28px">🌸</span><div><div class="name">Modo suave</div><div class="tiny">1 serie menos y sin subir peso</div></div></button>
+    <button class="opt" data-a="mehGo" data-v="rest"><span style="font-size:28px">💤</span><div><div class="name">Hoy descanso, sin culpa</div><div class="tiny">Descansar también es parte del plan</div></div></button>`);
+}
+
+/* ---------- Ciclo: configuración ---------- */
+function cycleSetup(){
+  const c=cyc(); ui.cs=ui.cs||{hormonal:c.hormonal, len:c.len, plen:c.plen};
+  const s2=ui.cs, last=[...c.periods].sort().pop()||dayKey(Date.now());
+  modal(`<span class="big-emo">🌙</span><h2 class="center">Tu ciclo</h2>
+    <p class="muted center">La app adapta consejos y te propone modo suave cuando lo necesites. Todo es privado 🔒</p>
+    <p class="name mt2">¿Usas anticonceptivos hormonales?</p><p class="tiny">Píldora, anillo, parche, implante o DIU hormonal</p>
+    <div class="seg mt">${[[false,'No'],[true,'Sí']].map(x=>`<button class="${s2.hormonal===x[0]?'on':''}" data-a="csH" data-v="${x[0]?1:0}">${x[1]}</button>`).join('')}</div>
+    ${s2.hormonal?`<div class="hint mt">Con anticonceptivos hormonales no hay fases naturales, así que no te las mostraré. Usaremos tu check-in de energía de cada día 💖</div>`:`
+    <p class="name mt2">¿Qué día empezó tu última regla?</p>
+    <input type="date" class="field mt" id="csLast" value="${last}" max="${dayKey(Date.now())}">
+    <div class="row between mt2"><div><div class="name">Duración del ciclo</div><div class="tiny">Si no lo sabes, deja 28</div></div>
+      <div class="stp" style="width:120px"><button data-a="csAdj" data-f="len" data-v="-1">−</button><input value="${s2.len}" readonly><button data-a="csAdj" data-f="len" data-v="1">+</button></div></div>
+    <div class="row between mt"><div><div class="name">Días de regla</div></div>
+      <div class="stp" style="width:120px"><button data-a="csAdj" data-f="plen" data-v="-1">−</button><input value="${s2.plen}" readonly><button data-a="csAdj" data-f="plen" data-v="1">+</button></div></div>
+    <p class="tiny mt">Con cada regla que marques, la app aprende tu ciclo real.</p>`}
+    <button class="btn mt2" data-a="csSave">Guardar ✨</button>
+    ${c.on?`<button class="link" style="display:block;margin:16px auto 0;color:var(--ink-3)" data-a="csOff">Desactivar seguimiento del ciclo</button>`:''}`);
+}
+function cycleCard(){
+  const c=cyc();
+  if(!c.on){ if(c.asked) return ''; return `<div class="card soft"><div class="row"><span style="font-size:30px">🌙</span><div class="grow"><h3 style="margin:0">¿Tenemos en cuenta tu ciclo?</h3><div class="muted">Consejos según tu fase y modo suave cuando lo necesites.</div></div></div>
+    <div class="row mt" style="gap:8px"><button class="btn sm lila" data-a="cycleSetup">Sí, me interesa</button><button class="btn sm ghost" data-a="cycleNo">Ahora no</button></div></div>`; }
+  if(c.hormonal) return '';
+  const inf=cycleInfo();
+  if(!inf) return `<div class="card"><div class="row"><span style="font-size:30px">🌙</span><div class="grow"><div class="name">Marca tu última regla</div><div class="muted">Para saber en qué fase estás.</div></div></div><button class="btn sm lila mt" data-a="cycleSetup">Configurar</button></div>`;
+  const P=PHASES[inf.ph], tip=P.tips[(inf.day+new Date().getDate())%P.tips.length];
+  return `<div class="card"><div class="row between"><div class="tiny">MI CICLO</div><button class="pill pk" data-a="periodToday">🩸 Me ha venido hoy</button></div>
+    <div class="row mt"><span style="font-size:34px">${P.e}</span><div class="grow"><div class="name">Día ${inf.day} · ${P.n}</div><div class="tiny">${inf.ph==='tarde'?`Se esperaba hace ${-inf.next+1} día${-inf.next+1===1?'':'s'}`:inf.ph==='menstrual'?'Cuídate mucho 💖':`Próxima regla en ~${inf.next} día${inf.next===1?'':'s'}`}</div></div></div>
+    <div class="hint mt" style="background:var(--lila-l);color:#5B3AA6">💡 ${tip}</div></div>`;
+}
 
 /* ---------- Registro / identificación ---------- */
 function viewAuth(){
@@ -525,8 +642,10 @@ function viewHoy(){
   const roadDone=ROAD.filter(r=>S.road[r.id]).length, next=ROAD.find(r=>!S.road[r.id]);
   const hi=['¡Hola','¡Hey','¡Holi'][new Date().getDate()%3];
   let main;
-  if(doneToday) main=`<div class="card hero"><span class="big-emo">🌟</span><h2 class="center">¡Entreno hecho hoy!</h2><p class="muted center">Descansa, hidrátate y siéntete orgullosa 💖</p>${pl?'':''}</div>`;
-  else if(pl && pl.items.length) main=`<div class="card hero"><div class="tiny">HOY TOCA</div><h2 style="font-size:26px;margin:4px 0 2px">${esc(pl.title)}</h2><p class="muted">${pl.items.length} ejercicios · ~${Math.round(pl.items.reduce((a,i)=>a+i.sets,0)*2.5)} min</p><button class="btn white mt2" data-a="start" data-v="${today}">▶ Empezar entreno</button></div>`;
+  const restToday=S.rest&&S.rest[dayKey(Date.now())];
+  if(restToday && !doneToday) main=`<div class="card hero"><span class="big-emo">💤</span><h2 class="center">Hoy descansas</h2><p class="muted center">Has escuchado a tu cuerpo, y eso también es entrenar 💖 Mañana más.</p><button class="btn white mt2" data-a="pickDay">Al final sí me apetece</button></div>`;
+  else if(doneToday) main=`<div class="card hero"><span class="big-emo">🌟</span><h2 class="center">¡Entreno hecho hoy!</h2><p class="muted center">Descansa, hidrátate y siéntete orgullosa 💖</p>${pl?'':''}</div>`;
+  else if(pl && pl.items.length) main=`<div class="card hero"><div class="tiny">HOY TOCA</div><h2 style="font-size:26px;margin:4px 0 2px">${esc(pl.title)}</h2><p class="muted">${pl.items.length} ejercicios · ~${Math.round(pl.items.reduce((a,i)=>a+i.sets,0)*2.5)} min</p><button class="btn white mt2" data-a="start" data-v="${today}">▶ Empezar entreno</button><button class="link center" style="display:block;margin:14px auto 0;color:#fff" data-a="meh">Hoy no me apetece 🫠</button></div>`;
   else main=`<div class="card hero"><span class="big-emo">💤</span><h2 class="center">Hoy toca descanso</h2><p class="muted center">Los músculos crecen descansando. ¡Tú tranqui!</p><button class="btn white mt2" data-a="pickDay">Quiero entrenar igualmente</button></div>`;
 
   const c=curChallenge(); let ch;
@@ -535,6 +654,7 @@ function viewHoy(){
 
   return `<div class="wrap">${header(`${hi}, ${esc(p.name)}!`, new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'}))}
   ${main}
+  ${cycleCard()}
   <div class="card" data-a="tab" data-v="logros" style="cursor:pointer">
     <div class="row between"><div class="tiny">CAMINO A LA DOMINADA</div><div class="pill pk">${roadDone}/${ROAD.length}</div></div>
     <div class="row mt"><span style="font-size:30px">${next?next.e:'👑'}</span><div class="grow"><div class="name">${next?'Siguiente: '+next.t:'¡Lo conseguiste, reina! 👑'}</div>${next?`<div class="muted">${next.tip}</div>`:''}</div></div>
@@ -542,7 +662,7 @@ function viewHoy(){
   </div>
   ${ch}
   <div class="card"><div class="row between"><div class="tiny">ESTA SEMANA</div><div class="pill">🔥 ${streak()} sem. seguidas</div></div>
-    <div class="week">${DAYS.map(d=>{ const day=ws+((d+6)%7)*864e5; const done=wk.some(w=>new Date(w.start).getDay()===d); const isT=d===today; return `<div class="wd ${done?'done':p.days.includes(d)?'plan':''} ${isT?'today':''}">${DL[d]}<div class="dot">${done?'✓':''}</div></div>`; }).join('')}</div>
+    <div class="week">${DAYS.map(d=>{ const day=ws+((d+6)%7)*864e5; const done=wk.some(w=>new Date(w.start).getDay()===d); const rs=!done&&S.rest&&S.rest[dayKey(day)]; const isT=d===today; return `<div class="wd ${done?'done':p.days.includes(d)?'plan':''} ${isT?'today':''}">${DL[d]}<div class="dot">${done?'✓':rs?'💤':''}</div></div>`; }).join('')}</div>
   </div>
   </div>`;
 }
@@ -564,6 +684,18 @@ function viewPlan(){
   return `<div class="wrap">${header('Mi plan 🗓️','Toca un día para activarlo o quitarlo')}
     <div class="card"><div class="days">${DAYS.map(x=>`<button class="day ${p.days.includes(x)?'on':''}" data-a="toggleDay" data-v="${x}">${DL[x]}</button>`).join('')}</div></div>
     ${daysHtml || '<div class="card soft center muted">Elige al menos un día arriba ☝️</div>'}
+    <div class="card"><h3>🌙 Mi ciclo</h3>
+      ${!cyc().on?`<p class="muted">Desactivado.</p><button class="btn sm lila mt" data-a="cycleSetup">Activar</button>`
+      :cyc().hormonal?`<p class="muted">Con anticonceptivos hormonales: usamos tu check-in de energía.</p><button class="btn sm ghost mt" data-a="cycleSetup">✏️ Cambiar</button>`
+      :`<p class="muted">Ciclo medio: <b>${cycleLen()} días</b>${cyc().periods.length<2?' (se ajusta solo al marcar más reglas)':' (calculado con tus reglas)'}</p>
+        <p class="tiny mt">ÚLTIMAS REGLAS</p>${[...cyc().periods].sort().reverse().slice(0,6).map(k=>`<div class="item"><div class="emo">🩸</div><div class="grow name">${new Date(parseDay(k)).toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}</div><button class="x" data-a="periodDel" data-v="${k}">✕</button></div>`).join('')||'<p class="muted">Ninguna todavía</p>'}
+        <div class="row mt" style="gap:8px"><input type="date" class="field" id="perIn" max="${dayKey(Date.now())}" style="flex:1"><button class="btn sm" data-a="periodAdd">＋</button></div>
+        <button class="btn sm ghost mt" data-a="cycleSetup">✏️ Ajustes del ciclo</button>`}
+    </div>
+    <div class="card"><h3>🎬 Mis vídeos de motivación</h3><p class="muted">Pega enlaces de YouTube que te motiven. Saldrán cuando digas "no me apetece".</p>
+      <div class="row mt" style="gap:8px"><input class="field" id="vidIn" placeholder="https://youtube.com/..." inputmode="url" autocomplete="off" style="flex:1"><button class="btn sm" data-a="addVid">＋</button></div>
+      ${(S.videos||[]).map((v,i)=>`<div class="item"><img src="https://i.ytimg.com/vi/${v.id}/default.jpg" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:10px"><div class="grow name">Vídeo ${i+1}</div><button class="x" data-a="delVid" data-v="${v.id}">✕</button></div>`).join('')}
+    </div>
     <div class="card"><h3>📚 Mis ejercicios</h3><p class="muted">Añade los de tu tabla del gimnasio.</p>
       <button class="btn lila mt" data-a="library">Ver / crear ejercicios</button></div>
     <div class="card"><h3>👤 Mi cuenta</h3>
@@ -666,9 +798,10 @@ function viewWorkout(){
 const stp=(e,s,f,v,d)=>`<div class="stp"><button data-a="adj" data-e="${e}" data-s="${s}" data-f="${f}" data-v="${-d}">−</button><input inputmode="decimal" data-in="set" data-e="${e}" data-s="${s}" data-f="${f}" value="${esc(v)}"><button data-a="adj" data-e="${e}" data-s="${s}" data-f="${f}" data-v="${d}">+</button></div>`;
 const stpT=(e,s,v)=>{ const on=ui.holdT&&ui.holdT.e===e&&ui.holdT.s===s; return `<div class="stp"><button data-a="hold" data-e="${e}" data-s="${s}" style="width:auto;padding:0 10px;font-size:15px;${on?'color:#fff;background:var(--pink)':''}">${on?'⏹ parar':'⏱'}</button><input inputmode="numeric" id="${on?'holdIn':''}" data-in="set" data-e="${e}" data-s="${s}" data-f="t" value="${esc(v)}"><button data-a="adj" data-e="${e}" data-s="${s}" data-f="t" data-v="5">+</button></div>`; };
 
-function makeEntry(exId, sets, target){
+function makeEntry(exId, sets, target, soft){
   const e=ex(exId), last=lastEntry(exId); let hint='', up=false, w=0, r=target, t=target;
-  if(last){
+  if(last && soft){ const ds=last.sets.filter(s=>s.done); w=Math.max(0,...ds.map(s=>num(s.w))); hint='🌸 Modo suave: '+(e.kind==='weight'&&w?`mismo peso que la última vez (${w} kg)`:'lo mismo que la última vez')+', sin presión'; }
+  else if(last){
     const ds=last.sets.filter(s=>s.done), lw=Math.max(...ds.map(s=>num(s.w)));
     const hit=ds.length>=Math.min(sets,last.sets.length) && ds.every(s=>e.kind==='time'?num(s.t)>=target:num(s.r)>=target);
     if(e.kind==='weight'){ w=lw; if(hit&&lw>0){ w=lw+2.5; up=true; hint=`⬆️ ¡La última vez lo clavaste! Prueba ${w} kg (antes ${lw} kg)`; } else hint=`💡 La última vez: ${ds.map(s=>`${num(s.w)}kg×${num(s.r)}`).join(' · ')}`; }
@@ -677,16 +810,21 @@ function makeEntry(exId, sets, target){
   }
   return {exId, target, hint, up, sets:Array.from({length:sets},()=>({w:e.kind==='weight'?w:'', r:e.kind==='time'?'':r, t:e.kind==='time'?t:'', done:false}))};
 }
-function startWorkout(day){
-  const pl=S.plan[day]||{title:'Entreno libre ✨',items:[]};
-  S.active={start:Date.now(), day:+day, title:pl.title, entries:pl.items.map(it=>makeEntry(it.exId,it.sets,it.reps))};
+function startWorkout(day, o={}){
+  const pl=S.plan[day]||{title:'Entreno libre ✨',items:[]}, ci=cycleInfo();
+  let items=pl.items.map(it=>({...it}));
+  if(o.mini){ items=(items.length?items:[{exId:'hang',sets:1,reps:20},{exId:'scap',sets:1,reps:8}]).slice(0,2).map(it=>({...it,sets:1})); }
+  else if(o.soft){ items=items.map(it=>({...it, sets:Math.max(1,it.sets-1)})); }
+  S.active={start:Date.now(), day:+day, title:pl.title+(o.mini?' · 5 min 🌱':o.soft?' · suave 🌸':''), entries:items.map(it=>makeEntry(it.exId,it.sets,it.reps,o.soft||o.mini)),
+    meta:{energy:o.energy||null, symptoms:o.symptoms||[], soft:!!(o.soft||o.mini), mini:!!o.mini, cycleDay:ci?ci.day:null, phase:ci?ci.ph:null}};
+  if(o.mini) setTimeout(()=>toast('🌱 Solo 5 minutos. Si luego quieres parar, paras. ¡Trato hecho!'),400);
   save(); closeModal(); render(); scrollTo(0,0); buzz(30);
 }
 function finishWorkout(){
   const A=S.active; stopHold(); stopRest();
   if(A.pausedAt){ A.pausedMs=(A.pausedMs||0)+(Date.now()-A.pausedAt); A.pausedAt=null; }
   const end=Date.now();
-  const w={id:uid(), start:A.start, end, pausedMs:A.pausedMs||0, title:A.title, day:A.day, entries:A.entries.map(e=>({exId:e.exId,target:e.target,sets:e.sets.map(s=>({w:s.w,r:s.r,t:s.t,done:s.done}))}))};
+  const w={id:uid(), start:A.start, end, pausedMs:A.pausedMs||0, meta:A.meta||{}, title:A.title, day:A.day, entries:A.entries.map(e=>({exId:e.exId,target:e.target,sets:e.sets.map(s=>({w:s.w,r:s.r,t:s.t,done:s.done}))}))};
   const sets=doneSets(w);
   if(!sets){ if(!confirm('No has marcado ninguna serie ✓. ¿Terminar sin guardar?')) return; S.active=null; save(); render(); return; }
   w.prs=[]; for(const e of w.entries){ const k=ex(e.exId).kind, prev=bestOf(e.exId), b=Math.max(0,...e.sets.filter(s=>s.done&&(k!=='weight'||num(s.r)>0)).map(s=>setMetric(k,s))); if(b>prev && prev>0) w.prs.push({exId:e.exId,v:b}); }
@@ -795,7 +933,28 @@ const A = {
   onbDone:()=>{ const d=ui.onbData; S.profile={name:d.name, days:d.days, since:Date.now()}; S.plan=buildPlan(d.days);
     const pre=[[],['r1','r2'],['r1','r2','r3','r4','r5']][d.lvl]; pre.forEach(id=>S.road[id]=Date.now());
     save(); render(); confetti(); toast(`¡Bienvenida, ${d.name}! 💖`); },
-  start:el=>startWorkout(el.dataset.v),
+  start:el=>checkin(el.dataset.v),
+  ciSym:el=>{ const v=el.dataset.v, a=ui.ci.sym; ui.ci.sym=a.includes(v)?a.filter(x=>x!==v):[...a,v]; ciRender(); },
+  ciEnergy:el=>{ ui.ci.energy=el.dataset.v; if(el.dataset.v==='low' || ui.ci.sym.length>=2){ ui.ci.step=2; ciRender(); } else A.ciGo({dataset:{v:'normal'}}); },
+  ciGo:el=>{ const c=ui.ci; startWorkout(c.day, {...c.o, energy:c.energy||null, symptoms:c.sym, soft:c.o.soft||el.dataset.v==='soft'}); },
+  meh:()=>mehModal(),
+  mehGo:el=>{ const v=el.dataset.v, d=new Date().getDay();
+    if(v==='rest'){ (S.rest=S.rest||{})[dayKey(Date.now())]=true; addXP(5); save(); closeModal(); render(); toast('💤 Descanso apuntado. ¡Bien hecho por escucharte! +5 XP'); return; }
+    if(v==='mini') startWorkout(d, {mini:true, energy:'low'});
+    else { ui.ci={day:d, sym:[], step:1, o:{soft:true}, energy:'low'}; startWorkout(d, {soft:true, energy:'low'}); } },
+  cycleSetup:()=>{ ui.cs=null; cycleSetup(); },
+  cycleNo:()=>{ cyc().asked=true; save(); render(); toast('Vale 💖 Puedes activarlo en Mi plan cuando quieras'); },
+  csH:el=>{ ui.cs.hormonal=el.dataset.v==='1'; cycleSetup(); },
+  csAdj:el=>{ const f=el.dataset.f, lim=f==='len'?[21,45]:[2,10]; ui.cs[f]=Math.min(lim[1],Math.max(lim[0],ui.cs[f]+ +el.dataset.v)); const l=$('#csLast')?.value; cycleSetup(); if(l&&$('#csLast')) $('#csLast').value=l; },
+  csSave:()=>{ const c=cyc(), s2=ui.cs; c.on=true; c.asked=true; c.hormonal=s2.hormonal; c.len=s2.len; c.plen=s2.plen;
+    if(!s2.hormonal){ const v=$('#csLast')?.value; if(v && !c.periods.includes(v)){ c.periods.push(v); c.periods.sort(); } }
+    save(); closeModal(); render(); toast('🌙 ¡Ciclo guardado!'); },
+  csOff:()=>{ if(!confirm('¿Desactivar el seguimiento del ciclo? Tus fechas se guardan por si vuelves.')) return; cyc().on=false; save(); closeModal(); render(); },
+  periodToday:()=>{ const k=dayKey(Date.now()), c=cyc(); if(c.periods.includes(k)){ toast('Ya está apuntado 🩸'); return; } if(!confirm('¿Apuntar que hoy te ha venido la regla?')) return; c.periods.push(k); c.periods.sort(); save(); render(); toast('🩸 Apuntado. Cuídate mucho 💖'); },
+  periodAdd:()=>{ const v=$('#perIn')?.value, c=cyc(); if(!v){ toast('Elige una fecha 📅'); return; } if(!c.periods.includes(v)){ c.periods.push(v); c.periods.sort(); } save(); render(); toast('🩸 Fecha añadida'); },
+  periodDel:el=>{ if(!confirm('¿Borrar esta fecha?')) return; const c=cyc(); c.periods=c.periods.filter(k=>k!==el.dataset.v); save(); render(); },
+  addVid:()=>{ const id=ytId($('#vidIn')?.value||''); if(!id){ toast('Pega un enlace de YouTube 🎬'); return; } S.videos=S.videos||[]; if(!S.videos.some(v=>v.id===id)) S.videos.push({id}); save(); render(); toast('🎬 ¡Vídeo guardado!'); },
+  delVid:el=>{ S.videos=(S.videos||[]).filter(v=>v.id!==el.dataset.v); save(); render(); },
   pickDay:()=>{ const ds=DAYS.filter(d=>S.plan[d]&&S.plan[d].items.length); modal(`<h2>¿Qué entreno hacemos?</h2>${ds.map(d=>`<button class="opt" data-a="start" data-v="${d}"><span style="font-size:26px">💪</span><div><div class="name">${esc(S.plan[d].title)}</div><div class="tiny">${DN[d]} · ${S.plan[d].items.length} ejercicios</div></div></button>`).join('')}<button class="opt" data-a="start" data-v="-1"><span style="font-size:26px">✨</span><div><div class="name">Entreno libre</div><div class="tiny">Añades tú los ejercicios</div></div></button>`); },
   chooseCh:()=>{ modal(`<h2>Elige tu reto 🎯</h2><p class="muted">Solo uno. Si lo consigues: +120 XP ✨</p>${challengeOptions().map(c=>`<button class="opt" data-a="setCh" data-v="${c.id}"><span style="font-size:28px">${c.e}</span><span class="name">${c.t}</span></button>`).join('')}`); },
   setCh:el=>{ S.challenges[weekKey(Date.now())]={id:el.dataset.v, at:Date.now()}; closeModal(); sweep(); render(); toast('🎯 ¡Reto aceptado!'); },
