@@ -340,6 +340,7 @@ function save(){ if(!S) return; S._t = Date.now(); writeLocal(); schedulePush();
 const CFG = window.GLOWFIT_CONFIG || {};
 const CLOUD = !!(CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase);
 const SB = CLOUD ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
+const errText = e => { if(!e) return ''; const m=[e.code,e.message||e.error_description||String(e),e.hint].filter(Boolean).join(' · '); return m.slice(0,200); };
 const appUrl = () => location.origin + location.pathname;
 const toRow = (w,uid) => ({id:w.id, user_id:uid, started_at:new Date(w.start).toISOString(), ended_at:new Date(w.end).toISOString(), title:w.title, day:w.day, entries:w.entries, prs:w.prs||[], xp:w.xp||0, paused_ms:w.pausedMs||0, meta:w.meta||{}});
 const fromRow = r => ({id:r.id, start:Date.parse(r.started_at), end:Date.parse(r.ended_at), title:r.title, day:r.day, entries:r.entries||[], prs:r.prs||[], xp:r.xp||0, pausedMs:r.paused_ms||0, meta:r.meta||{}, _s:true});
@@ -362,7 +363,7 @@ async function push(){
     if(un.length){ r = await SB.from('workouts').upsert(un.map(w=>toRow(w,uid))); if(r.error) throw r.error; un.forEach(w=>w._s=true); }
     if(st._del.length){ const ids=[...st._del]; r = await SB.from('workouts').delete().eq('user_id',uid).in('id',ids); if(r.error) throw r.error; st._del = st._del.filter(i=>!ids.includes(i)); }
     writeLocal(st, key); if(st===S) setSync('ok');
-  }catch(e){ console.warn('sync', e); if(st===S) setSync('error'); }
+  }catch(e){ console.warn('sync', e); ui.syncErr=errText(e); if(st===S) setSync('error'); }
   pushing=false;
   if(pushAgain){ pushAgain=false; push(); }
 }
@@ -608,8 +609,8 @@ function socialBadge(){ const s=ui.soc; if(!s||!s.loaded) return 0; return (s.ch
 async function loadSocial(){
   if(!SB||!USER||!S||!S.profile) return; const uid=USER.id; ui.socAt=Date.now();
   try{
-    let me=(await SB.from('friend_profiles').select('*').eq('user_id',uid).maybeSingle()).data;
-    if(!me){ for(let i=0;i<5&&!me;i++){ const row={user_id:uid, name:S.profile.name.slice(0,40), emoji:'🌸', code:genCode()}; const r=await SB.from('friend_profiles').insert(row); if(!r.error) me=row; } if(!me) throw new Error('no profile'); }
+    const r0=await SB.from('friend_profiles').select('*').eq('user_id',uid).maybeSingle(); if(r0.error) throw r0.error; let me=r0.data;
+    if(!me){ for(let i=0;i<5&&!me;i++){ const row={user_id:uid, name:S.profile.name.slice(0,40), emoji:'🌸', code:genCode()}; const r=await SB.from('friend_profiles').insert(row); if(!r.error) me=row; else if(r.error.code!=='23505') throw r.error; } if(!me) throw new Error('no profile'); }
     else if(me.name!==S.profile.name){ await SB.from('friend_profiles').update({name:S.profile.name.slice(0,40)}).eq('user_id',uid); me.name=S.profile.name; }
     const [a,b]=await Promise.all([SB.from('friendships').select('*').eq('requester',uid), SB.from('friendships').select('*').eq('addressee',uid)]);
     const fs=[...(a.data||[]),...(b.data||[])], ids=fs.map(f=>f.requester===uid?f.addressee:f.requester);
@@ -622,7 +623,7 @@ async function loadSocial(){
       SB.from('cheers').select('*').eq('to_user',uid).order('created_at',{ascending:false}).limit(30)]);
     ui.soc={me, friends, posts, replies:rp.data||[], reactions:rc.data||[], cheers:ch.data||[], loaded:true, err:false};
     if(S.profile){ const nb=checkBadges(); nb.forEach(x=>{ toast(x.e+' Insignia: '+x.t); postActivity('badge','',{id:x.id}); }); if(nb.length) save(); }
-  }catch(e){ console.warn('social',e); ui.soc={...(ui.soc||{}), loaded:true, err:true}; }
+  }catch(e){ console.warn('social',e); ui.soc={...(ui.soc||{}), loaded:true, err:true, errMsg:errText(e)}; }
   if(!S || S.active || $('.ov')) return;
   if(['amigas','hoy'].includes(ui.tab)) render(); else { const n=$('nav.bottom'); if(n) n.outerHTML=nav(); }
 }
@@ -655,7 +656,7 @@ function viewAmigas(){
   const s=ui.soc;
   if(!SB||!USER) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card soft center"><span class="big-emo">👯‍♀️</span><h3>Entrena con tus amigas</h3><p class="muted">Cuando conectes tu cuenta podrás añadir amigas, ver sus logros, responder la pregunta de la semana y mandaros mensajes de ánimo.</p></div></div>`;
   if(!s||!s.loaded) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card center"><span class="big-emo" style="animation:pulse 1.2s infinite">👯‍♀️</span><p class="muted">Cargando…</p></div></div>`;
-  if(s.err&&!s.me) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card center"><p class="muted">No he podido cargar tus amigas 📶</p><button class="btn sm mt" data-a="socReload">Reintentar</button></div></div>`;
+  if(s.err&&!s.me) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card center"><p class="muted">No he podido cargar tus amigas 📶</p>${s.errMsg?`<p class="tiny mt" style="word-break:break-word">Detalle: ${esc(s.errMsg)}</p>`:''}<button class="btn sm mt" data-a="socReload">Reintentar</button></div></div>`;
   const acc=s.friends.filter(f=>f.status==='accepted'), inc=s.friends.filter(f=>f.status==='pending'&&f.incoming), out=s.friends.filter(f=>f.status==='pending'&&!f.incoming);
   const wk=weekStart(Date.now()), qi=weekIdx()%QUESTIONS.length, myAns=s.posts.find(p=>p.kind==='answer'&&p.user_id===USER.id&&(p.data||{}).q===qi&&Date.parse(p.created_at)>=wk);
   const ans=s.posts.filter(p=>p.kind==='answer'&&(p.data||{}).q===qi&&Date.parse(p.created_at)>=wk);
@@ -884,7 +885,7 @@ function viewPlan(){
     <div class="card"><h3>📚 Mis ejercicios</h3><p class="muted">Añade los de tu tabla del gimnasio.</p>
       <button class="btn lila mt" data-a="library">Ver / crear ejercicios</button></div>
     <div class="card"><h3>👤 Mi cuenta</h3>
-      ${USER?`<p class="muted">${esc(USER.email)}</p><p class="tiny mt" id="syncLabel">${syncLabel()}</p><div class="row mt" style="flex-wrap:wrap;gap:8px"><button class="btn sm ghost" data-a="changePw">🔑 Cambiar contraseña</button><button class="btn sm ghost" data-a="logout">🚪 Cerrar sesión</button></div>`
+      ${USER?`<p class="muted">${esc(USER.email)}</p><p class="tiny mt" id="syncLabel">${syncLabel()}</p>${ui.sync==='error'&&ui.syncErr?`<p class="tiny" style="word-break:break-word">Detalle: ${esc(ui.syncErr)}</p>`:''}<div class="row mt" style="flex-wrap:wrap;gap:8px"><button class="btn sm ghost" data-a="changePw">🔑 Cambiar contraseña</button><button class="btn sm ghost" data-a="logout">🚪 Cerrar sesión</button></div>`
       :`<p class="muted">Usando la app sin cuenta: tus datos solo están en este móvil.</p>${CLOUD?`<button class="btn sm mt" data-a="toAuth">☁️ Crear cuenta o entrar</button>`:''}`}
     </div>
     <div class="card"><h3>⚙️ Ajustes</h3>

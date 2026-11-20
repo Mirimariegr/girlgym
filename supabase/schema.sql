@@ -223,3 +223,14 @@ drop policy if exists "cheers read" on public.cheers;
 create policy "cheers select" on public.cheers for select to authenticated using (auth.uid() in (from_user, to_user));
 create policy "cheers insert" on public.cheers for insert to authenticated with check (from_user = auth.uid() and public.is_friend(from_user, to_user));
 create policy "cheers read" on public.cheers for update to authenticated using (to_user = auth.uid()) with check (to_user = auth.uid());
+
+-- ---------- Permisos de acceso para la app (la seguridad la ponen las reglas RLS) ----------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+grant execute on function public.is_friend(uuid, uuid) to authenticated;
+grant execute on function public.is_connected(uuid, uuid) to authenticated;
+grant execute on function public.find_friend_code(text) to authenticated;
+alter default privileges in schema public grant select, insert, update, delete on tables to authenticated;
+alter default privileges in schema public grant usage, select on sequences to authenticated;
+notify pgrst, 'reload schema';
