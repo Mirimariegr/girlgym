@@ -11,6 +11,8 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -173,6 +175,9 @@ select.sel{width:100%;padding:11px 12px;border-radius:14px;border:1.5px solid va
 .center{text-align:center}
 .onb{min-height:100vh;display:flex;flex-direction:column;justify-content:center}
 .hidden{display:none!important}
+.pw{position:relative}.pw .field{padding-right:52px}.pw .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:20px;padding:8px}
+.hint.err{background:#FFE8EE;color:#B4234F}
+.btn:disabled{opacity:.6}
 details summary{cursor:pointer;list-style:none}
 details summary::-webkit-details-marker{display:none}
 </style>
@@ -267,13 +272,99 @@ const BADGES = [
 ];
 
 /* ---------- estado ---------- */
-let S = load();
-const ui = {tab:'hoy', chartEx:null, holdT:null, restEnd:0, onb:0, onbData:{name:'',days:[1,3,5],lvl:0}, openW:null};
+let S = null;      // datos de la usuaria (null = sin sesión)
+let USER = null;   // usuaria de Supabase
+const ui = {tab:'hoy', chartEx:null, holdT:null, restEnd:0, onb:0, onbData:{name:'',days:[1,3,5],lvl:0}, booting:true, sync:'ok', auth:{mode:'login',email:'',name:'',busy:false,err:'',msg:''}};
 let photosThisWeek = 0;
 
-function fresh(){ return {v:1, profile:null, exercises:JSON.parse(JSON.stringify(DEFAULT_EX)), plan:{}, workouts:[], xp:0, badges:{}, road:{}, challenges:{}, active:null, restSec:90}; }
-function load(){ try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && s.v) return Object.assign(fresh(), s); }catch(e){} return fresh(); }
-function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){ toast('⚠️ No se pudo guardar'); } }
+function fresh(){ return {v:1, profile:null, exercises:JSON.parse(JSON.stringify(DEFAULT_EX)), plan:{}, workouts:[], xp:0, badges:{}, road:{}, challenges:{}, active:null, restSec:90, _t:0, _del:[]}; }
+const storeKey = () => USER ? KEY+':'+USER.id : KEY+':local';
+function load(){ try{ const s = JSON.parse(localStorage.getItem(storeKey())); if(s && s.v) return Object.assign(fresh(), s); }catch(e){} return fresh(); }
+function legacy(){ for(const k of [KEY, KEY+':local']){ try{ const s=JSON.parse(localStorage.getItem(k)); if(s && s.profile) return {k,s}; }catch(e){} } return null; }
+function writeLocal(st=S, key=storeKey()){ if(!st) return; try{ localStorage.setItem(key, JSON.stringify(st)); }catch(e){ toast('⚠️ No se pudo guardar'); } }
+function save(){ if(!S) return; S._t = Date.now(); writeLocal(); schedulePush(); }
+
+/* ---------- nube (Supabase) ---------- */
+const CFG = window.GLOWFIT_CONFIG || {};
+const CLOUD = !!(CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase);
+const SB = CLOUD ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
+const appUrl = () => location.origin + location.pathname;
+const toRow = (w,uid) => ({id:w.id, user_id:uid, started_at:new Date(w.start).toISOString(), ended_at:new Date(w.end).toISOString(), title:w.title, day:w.day, entries:w.entries, prs:w.prs||[], xp:w.xp||0});
+const fromRow = r => ({id:r.id, start:Date.parse(r.started_at), end:Date.parse(r.ended_at), title:r.title, day:r.day, entries:r.entries||[], prs:r.prs||[], xp:r.xp||0, _s:true});
+const syncIcon = () => ({ok:'☁️', pending:'⏳', error:'⚠️'})[ui.sync];
+const syncLabel = () => ({ok:'☁️ Todo guardado en la nube', pending:'⏳ Guardando en la nube…', error:'⚠️ Sin conexión: se guardará en cuanto vuelva internet'})[ui.sync];
+function setSync(v){ ui.sync=v; const d=$('#syncDot'); if(d) d.textContent=syncIcon(); const l=$('#syncLabel'); if(l) l.textContent=syncLabel(); }
+
+let pushT=null, pushing=false, pushAgain=false;
+function schedulePush(){ if(!SB || !USER) return; clearTimeout(pushT); setSync('pending'); pushT=setTimeout(push, 1200); }
+async function push(){
+  if(!SB || !USER || !S) return;
+  if(pushing){ pushAgain=true; return; }
+  pushing=true; clearTimeout(pushT);
+  const st=S, uid=USER.id, key=storeKey();
+  try{
+    const {workouts, _del, ...rest} = st;
+    let r = await SB.from('user_state').upsert({user_id:uid, data:rest, updated_at:new Date(st._t||Date.now()).toISOString()});
+    if(r.error) throw r.error;
+    const un = st.workouts.filter(w=>!w._s);
+    if(un.length){ r = await SB.from('workouts').upsert(un.map(w=>toRow(w,uid))); if(r.error) throw r.error; un.forEach(w=>w._s=true); }
+    if(st._del.length){ const ids=[...st._del]; r = await SB.from('workouts').delete().eq('user_id',uid).in('id',ids); if(r.error) throw r.error; st._del = st._del.filter(i=>!ids.includes(i)); }
+    writeLocal(st, key); if(st===S) setSync('ok');
+  }catch(e){ console.warn('sync', e); if(st===S) setSync('error'); }
+  pushing=false;
+  if(pushAgain){ pushAgain=false; push(); }
+}
+async function pull(){
+  const uid=USER.id;
+  const [st, wo] = await Promise.all([
+    SB.from('user_state').select('data,updated_at').eq('user_id',uid).maybeSingle(),
+    SB.from('workouts').select('*').eq('user_id',uid).order('started_at')]);
+  if(st.error || wo.error) throw (st.error || wo.error);
+  if(st.data){
+    const rt = Date.parse(st.data.updated_at) || 0;
+    if(!S.profile || rt > (S._t||0)){ const keep={workouts:S.workouts, _del:S._del}; S = Object.assign(fresh(), st.data.data, keep); S._t = rt; }
+  } else if(!S.profile){
+    const L = legacy();   // datos de antes de tener cuenta → se suben a la nube
+    if(L){ S = Object.assign(fresh(), L.s); S.workouts.forEach(w=>delete w._s); S._del=[]; localStorage.removeItem(L.k); }
+  }
+  const remote = (wo.data||[]).map(fromRow), rid = new Set(remote.map(w=>w.id));
+  const localNew = S.workouts.filter(w=>!w._s && !rid.has(w.id));
+  S.workouts = [...remote.filter(w=>!S._del.includes(w.id)), ...localNew].sort((a,b)=>a.start-b.start);
+}
+async function onLogin(user){
+  if(USER && USER.id===user.id && S) return;
+  USER = user; S = load(); ui.booting = true; render();
+  try{ await pull(); setSync('ok'); }
+  catch(e){ console.warn('pull', e); setSync('error'); toast('📴 Sin conexión: usando los datos de este móvil'); }
+  ui.booting = false; ui.tab = 'hoy';
+  if(!S.profile){ ui.onb = 0; const n = user.user_metadata && user.user_metadata.name; if(n){ ui.onbData.name = n; ui.onb = 1; } }
+  writeLocal(); schedulePush();
+  await refreshPhotoStats(); if(S.profile) sweep(true);
+  render();
+}
+function onLogout(){
+  stopHold(); stopRest(); clearTimeout(pushT);
+  USER = null; S = null; photoCache = null; ui.tab = 'hoy'; ui.onb = 0; ui.onbData = {name:'',days:[1,3,5],lvl:0};
+  ui.auth = {mode:'login', email:ui.auth.email, name:'', busy:false, err:'', msg:''};
+  closeModal(); render();
+}
+function enterLocal(){
+  USER = null; S = load();
+  if(!S.profile){ const L=legacy(); if(L){ S=Object.assign(fresh(), L.s); } }
+  ui.booting = false; writeLocal();
+  refreshPhotoStats().then(()=>{ if(S.profile) sweep(true); render(); });
+  render();
+}
+function authErr(e){
+  const m = String((e && (e.message || e.error_description)) || e || '');
+  if(/invalid login/i.test(m)) return 'Email o contraseña incorrectos 🙈';
+  if(/already registered|already been registered|exists/i.test(m)) return 'Ya hay una cuenta con ese email. Prueba a entrar 💖';
+  if(/not confirmed/i.test(m)) return 'Aún no has confirmado tu email. Busca el correo de GlowFit (mira en spam) 💌';
+  if(/password/i.test(m) && /6|8|least|short|weak/i.test(m)) return 'Esa contraseña es muy corta o fácil. Usa al menos 8 caracteres.';
+  if(/rate|too many|security purposes/i.test(m)) return 'Demasiados intentos. Espera un minutito y vuelve a probar ⏳';
+  if(/fetch|network|failed/i.test(m)) return 'No hay conexión. Revisa tu internet 📶';
+  return 'Algo ha fallado: ' + m;
+}
 
 /* ---------- utils ---------- */
 const $ = s => document.querySelector(s);
@@ -284,6 +375,7 @@ const num = v => { const n = parseFloat(String(v).replace(',','.')); return isNa
 const fmtT = ms => { const s=Math.max(0,Math.floor(ms/1000)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':':'')+String(m).padStart(h?2:1,'0')+':'+String(x).padStart(2,'0'); };
 const fmtMin = ms => { const m=Math.round(ms/60000); return m<60? m+' min' : Math.floor(m/60)+' h '+(m%60)+' min'; };
 const fmtD = t => new Date(t).toLocaleDateString('es-ES',{day:'numeric',month:'short'});
+const fmtH = t => new Date(t).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
 const unit = k => k==='weight'?'kg':k==='time'?'s':'reps';
 function weekStart(d){ d=new Date(d); d.setHours(0,0,0,0); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.getTime(); }
 const weekKey = d => new Date(weekStart(d)).toISOString().slice(0,10);
@@ -330,6 +422,8 @@ function sweep(silent){ const r=checkRoad(), c=checkChallenge(), b=checkBadges()
    ========================================================= */
 function render(){
   const app=$('#app');
+  if(ui.booting){ app.innerHTML=`<div class="wrap onb center"><span class="big-emo" style="animation:pulse 1.2s infinite">💖</span><p class="muted">Cargando…</p></div>`; return; }
+  if(!S){ app.innerHTML=viewAuth(); return; }
   if(!S.profile){ app.innerHTML=viewOnb(); return; }
   if(S.active){ app.innerHTML=viewWorkout(); tick(); return; }
   const v={hoy:viewHoy,plan:viewPlan,logros:viewLogros,datos:viewDatos}[ui.tab]();
@@ -340,7 +434,59 @@ function nav(){
   const b=(id,ic,l)=>`<button class="${ui.tab===id?'on':''}" data-a="tab" data-v="${id}"><span class="ic">${ic}</span>${l}</button>`;
   return `<nav class="bottom">${b('hoy','🏠','Hoy')}${b('plan','🗓️','Mi plan')}${b('logros','🏆','Logros')}${b('datos','📈','Progreso')}</nav>`;
 }
-function header(title, sub){ const L=level(S.xp); return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="chip-xp">✨ ${S.xp} XP</div></div>`; }
+function header(title, sub){ const L=level(S.xp); return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="chip-xp">${USER?`<span id="syncDot" title="Nube">${syncIcon()}</span> `:''}✨ ${S.xp} XP</div></div>`; }
+
+/* ---------- Registro / identificación ---------- */
+function viewAuth(){
+  const a=ui.auth, reg=a.mode==='signup', rec=a.mode==='forgot';
+  const intro = rec ? 'Escribe tu email y te mandamos un enlace para crear una contraseña nueva.' : reg ? 'Crea tu cuenta y tus entrenos se guardarán en la nube ☁️' : '¡Hola de nuevo! Entra para seguir brillando ✨';
+  if(!CLOUD) return `<div class="wrap onb"><span class="big-emo">💖</span><h1 class="center" style="font-size:34px">GlowFit</h1>
+    <div class="hint mt2">⚙️ Las cuentas aún no están activadas: falta conectar la nube (Supabase) en <b>config.js</b>.</div>
+    <p class="muted center mt">Mientras tanto puedes usar la app sin cuenta. Tus datos se quedan en este móvil y podrás pasarlos a tu cuenta más adelante.</p>
+    <button class="btn mt2" data-a="localMode">Usar sin cuenta</button></div>`;
+  return `<div class="wrap onb"><span class="big-emo">💖</span><h1 class="center" style="font-size:34px">GlowFit</h1>
+    <p class="muted center mt">${intro}</p>
+    ${rec?'':`<div class="seg mt2"><button type="button" class="${!reg?'on':''}" data-a="authMode" data-v="login">Entrar</button><button type="button" class="${reg?'on':''}" data-a="authMode" data-v="signup">Crear cuenta</button></div>`}
+    <form id="authForm" class="mt2" novalidate>
+      ${reg?`<input class="field" name="name" placeholder="Tu nombre" autocomplete="given-name" value="${esc(a.name)}">`:''}
+      <input class="field ${reg?'mt':''}" name="email" type="email" placeholder="Tu email" autocomplete="email" inputmode="email" autocapitalize="off" value="${esc(a.email)}">
+      ${rec?'':`<div class="pw mt"><input class="field" id="pwIn" name="password" type="password" placeholder="${reg?'Crea una contraseña (mín. 8)':'Contraseña'}" autocomplete="${reg?'new-password':'current-password'}"><button type="button" class="eye" data-a="authShow" aria-label="Mostrar u ocultar contraseña">👁️</button></div>`}
+      ${a.err?`<div class="hint err mt">${esc(a.err)}</div>`:''}
+      ${a.msg?`<div class="hint up mt">${esc(a.msg)}</div>`:''}
+      <button class="btn mt2" type="submit" ${a.busy?'disabled':''}>${a.busy?'Un momento…':rec?'Enviar enlace 💌':reg?'Crear mi cuenta ✨':'Entrar 💖'}</button>
+    </form>
+    <p class="center mt2">${rec?`<button class="link" data-a="authMode" data-v="login">← Volver a entrar</button>`:!reg?`<button class="link" data-a="authMode" data-v="forgot">¿Olvidaste tu contraseña?</button>`:''}</p>
+    <p class="tiny center mt2">🔒 Tus datos y fotos son privados: solo tú puedes verlos.</p>
+  </div>`;
+}
+async function submitAuth(form){
+  const a=ui.auth, f=new FormData(form), pw=String(f.get('password')||'');
+  a.email=String(f.get('email')||'').trim(); if(f.has('name')) a.name=String(f.get('name')||'').trim();
+  a.err=''; a.msg='';
+  if(!/^\S+@\S+\.\S+$/.test(a.email)){ a.err='Revisa el email, parece que falta algo 💌'; return render(); }
+  if(a.mode==='signup'){ if(!a.name){ a.err='¿Cómo te llamas? 💖'; return render(); } if(pw.length<8){ a.err='La contraseña necesita al menos 8 caracteres'; return render(); } }
+  if(a.mode==='login' && !pw){ a.err='Escribe tu contraseña'; return render(); }
+  a.busy=true; render();
+  try{
+    if(a.mode==='login'){
+      const {error}=await SB.auth.signInWithPassword({email:a.email, password:pw}); if(error) throw error;
+      a.busy=false;   // onAuthStateChange se encarga de entrar
+    } else if(a.mode==='signup'){
+      const {data,error}=await SB.auth.signUp({email:a.email, password:pw, options:{data:{name:a.name}, emailRedirectTo:appUrl()}}); if(error) throw error;
+      a.busy=false;
+      if(data.user && Array.isArray(data.user.identities) && data.user.identities.length===0) throw new Error('already registered');
+      if(!data.session){ a.mode='login'; a.msg='💌 ¡Cuenta creada! Te hemos enviado un email: ábrelo para confirmarla y después entra aquí.'; render(); }
+    } else {
+      const {error}=await SB.auth.resetPasswordForEmail(a.email, {redirectTo:appUrl()}); if(error) throw error;
+      a.busy=false; a.msg='💌 Si ese email tiene cuenta, te llegará un enlace (mira también en spam).'; render();
+    }
+  }catch(e){ a.busy=false; a.err=authErr(e); render(); }
+}
+function newPasswordModal(){
+  modal(`<span class="big-emo">🔑</span><h2 class="center">Nueva contraseña</h2>
+    <form id="pwForm" class="mt"><div class="pw"><input class="field" id="pwIn" name="password" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password"><button type="button" class="eye" data-a="authShow" aria-label="Mostrar u ocultar contraseña">👁️</button></div>
+    <button class="btn mt2" type="submit">Guardar contraseña ✨</button></form>`);
+}
 
 /* ---------- Onboarding ---------- */
 function viewOnb(){
@@ -418,6 +564,10 @@ function viewPlan(){
     ${daysHtml || '<div class="card soft center muted">Elige al menos un día arriba ☝️</div>'}
     <div class="card"><h3>📚 Mis ejercicios</h3><p class="muted">Añade los de tu tabla del gimnasio.</p>
       <button class="btn lila mt" data-a="library">Ver / crear ejercicios</button></div>
+    <div class="card"><h3>👤 Mi cuenta</h3>
+      ${USER?`<p class="muted">${esc(USER.email)}</p><p class="tiny mt" id="syncLabel">${syncLabel()}</p><div class="row mt" style="flex-wrap:wrap;gap:8px"><button class="btn sm ghost" data-a="changePw">🔑 Cambiar contraseña</button><button class="btn sm ghost" data-a="logout">🚪 Cerrar sesión</button></div>`
+      :`<p class="muted">Usando la app sin cuenta: tus datos solo están en este móvil.</p>${CLOUD?`<button class="btn sm mt" data-a="toAuth">☁️ Crear cuenta o entrar</button>`:''}`}
+    </div>
     <div class="card"><h3>⚙️ Ajustes</h3>
       <div class="row between mt"><span class="name">Descanso entre series</span><div class="seg" style="width:180px">${[60,90,120].map(s=>`<button class="${S.restSec===s?'on':''}" data-a="restSec" data-v="${s}">${s}s</button>`).join('')}</div></div>
       <div class="row mt2" style="flex-wrap:wrap;gap:8px"><button class="btn sm ghost" data-a="rename">✏️ Mi nombre</button><button class="btn sm ghost" data-a="export">💾 Copia de seguridad</button><button class="btn sm ghost" data-a="import">📥 Restaurar</button><button class="btn sm ghost" data-a="reset">🗑️ Empezar de cero</button></div>
@@ -455,9 +605,9 @@ function viewDatos(){
     ${used.length?`<select class="sel mt" data-in="chartEx">${used.map(id=>`<option value="${id}" ${id===ui.chartEx?'selected':''}>${ex(id).emoji} ${esc(ex(id).name)}</option>`).join('')}</select>${exChart(ui.chartEx)}`:'<p class="muted">Cuando entrenes verás aquí cómo subes 📈</p>'}
   </div>
   <div class="card"><div class="row between"><h3 style="margin:0">Antes y después 📸</h3><button class="btn sm" data-a="addPhoto">＋ Foto</button></div>
-    <p class="muted mt">Solo se guardan en tu móvil 🔒</p><div id="photos" class="mt"></div></div>
+    <p class="muted mt">${USER?'Guardadas en tu nube privada: solo tú las ves 🔒':'Solo se guardan en este móvil 🔒'}</p><div id="photos" class="mt"></div></div>
   <div class="card"><h3>Historial</h3>${W.length?[...W].reverse().slice(0,20).map(w=>`
-    <details class="item" style="display:block"><summary class="row"><div class="emo">💪</div><div class="grow"><div class="name">${esc(w.title)}</div><div class="muted">${fmtD(w.start)} · ${fmtMin(w.end-w.start)} · ${doneSets(w)} series ${(w.prs||[]).length?'· 🏆'+w.prs.length:''}</div></div></summary>
+    <details class="item" style="display:block"><summary class="row"><div class="emo">💪</div><div class="grow"><div class="name">${esc(w.title)}</div><div class="muted">${fmtD(w.start)} · ${fmtH(w.start)}–${fmtH(w.end)} · ${fmtMin(w.end-w.start)} · ${doneSets(w)} series ${(w.prs||[]).length?'· 🏆'+w.prs.length:''}</div></div></summary>
     <div style="padding:8px 0 4px 54px">${w.entries.filter(e=>e.sets.some(s=>s.done)).map(e=>{const k=ex(e.exId).kind;return `<div class="muted"><b>${esc(ex(e.exId).name)}</b>: ${e.sets.filter(s=>s.done).map(s=>k==='weight'?`${num(s.w)}kg×${num(s.r)}`:k==='time'?`${num(s.t)}s`:`${num(s.r)}`).join(' · ')}</div>`}).join('')}
     <button class="link mt" data-a="delW" data-v="${w.id}">Borrar este entreno</button></div></details>`).join(''):'<p class="muted">Aún no hay entrenos. ¡El primero es el más especial! 🎀</p>'}</div>
   </div>`;
@@ -582,11 +732,26 @@ function exForm(e, target){
 }
 
 /* ---------- fotos (IndexedDB) ---------- */
-let photoCount=0;
+let photoCount=0, photoCache=null;
 function db(){ return new Promise((res,rej)=>{ const r=indexedDB.open('glowfit',1); r.onupgradeneeded=()=>r.result.createObjectStore('photos',{keyPath:'id'}); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
-async function allPhotos(){ try{ const d=await db(); return await new Promise(res=>{ const q=d.transaction('photos').objectStore('photos').getAll(); q.onsuccess=()=>res(q.result.sort((a,b)=>a.date-b.date)); q.onerror=()=>res([]); }); }catch(e){ return []; } }
-async function putPhoto(p){ const d=await db(); return new Promise((res,rej)=>{ const t=d.transaction('photos','readwrite'); t.objectStore('photos').put(p); t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
-async function delPhoto(id){ const d=await db(); return new Promise(res=>{ const t=d.transaction('photos','readwrite'); t.objectStore('photos').delete(id); t.oncomplete=res; }); }
+async function allPhotos(){
+  if(USER){ try{
+    if(photoCache && photoCache.exp>Date.now()) return photoCache.list;
+    const r=await SB.from('photos').select('id,taken_at,path').eq('user_id',USER.id).order('taken_at'); if(r.error) throw r.error;
+    let list=[]; if(r.data.length){ const u=await SB.storage.from('photos').createSignedUrls(r.data.map(p=>p.path), 3600); if(u.error) throw u.error;
+      list=r.data.map((p,i)=>({id:p.id, date:Date.parse(p.taken_at), path:p.path, data:(u.data[i]||{}).signedUrl||''})); }
+    photoCache={list, exp:Date.now()+50*60000}; return list;
+  }catch(e){ console.warn('photos', e); return []; } }
+  try{ const d=await db(); return await new Promise(res=>{ const q=d.transaction('photos').objectStore('photos').getAll(); q.onsuccess=()=>res(q.result.sort((a,b)=>a.date-b.date)); q.onerror=()=>res([]); }); }catch(e){ return []; } }
+async function putPhoto(p){
+  if(USER){ const blob=await (await fetch(p.data)).blob(), path=`${USER.id}/${p.id}.jpg`;
+    let r=await SB.storage.from('photos').upload(path, blob, {contentType:'image/jpeg'}); if(r.error) throw r.error;
+    r=await SB.from('photos').insert({id:p.id, user_id:USER.id, taken_at:new Date(p.date).toISOString(), path}); if(r.error) throw r.error;
+    photoCache=null; return; }
+  const d=await db(); return new Promise((res,rej)=>{ const t=d.transaction('photos','readwrite'); t.objectStore('photos').put(p); t.oncomplete=res; t.onerror=()=>rej(t.error); }); }
+async function delPhoto(id){
+  if(USER){ const p=(await allPhotos()).find(x=>x.id===id); if(p) await SB.storage.from('photos').remove([p.path]); await SB.from('photos').delete().eq('user_id',USER.id).eq('id',id); photoCache=null; return; }
+  const d=await db(); return new Promise(res=>{ const t=d.transaction('photos','readwrite'); t.objectStore('photos').delete(id); t.oncomplete=res; }); }
 async function refreshPhotoStats(){ const ps=await allPhotos(); photoCount=ps.length; const ws=weekStart(Date.now()); photosThisWeek=ps.filter(p=>p.date>=ws).length; }
 async function loadPhotos(){
   const ps=await allPhotos(); const el=$('#photos'); if(!el) return;
@@ -599,7 +764,7 @@ function pickPhoto(){
   const i=document.createElement('input'); i.type='file'; i.accept='image/*';
   i.onchange=()=>{ const f=i.files[0]; if(!f) return; const img=new Image(); const url=URL.createObjectURL(f);
     img.onload=async()=>{ const M=1080, sc=Math.min(1,M/Math.max(img.width,img.height)); const c=document.createElement('canvas'); c.width=img.width*sc; c.height=img.height*sc; c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
-      try{ await putPhoto({id:uid(), date:Date.now(), data:c.toDataURL('image/jpeg',.82)}); await refreshPhotoStats(); addXP(20); toast('📸 ¡Foto guardada! +20 XP'); sweep(); render(); }catch(e){ toast('⚠️ No se pudo guardar la foto'); } };
+      toast('📸 Guardando…'); try{ await putPhoto({id:uid(), date:Date.now(), data:c.toDataURL('image/jpeg',.82)}); await refreshPhotoStats(); addXP(20); toast('📸 ¡Foto guardada! +20 XP'); sweep(); render(); }catch(e){ toast('⚠️ No se pudo guardar la foto'); } };
     img.src=url; };
   i.click();
 }
@@ -609,6 +774,12 @@ function pickPhoto(){
    ========================================================= */
 const A = {
   tab:el=>{ ui.tab=el.dataset.v; render(); scrollTo(0,0); },
+  authMode:el=>{ const f=$('#authForm'); if(f){ const d=new FormData(f); ui.auth.email=String(d.get('email')||ui.auth.email); if(d.has('name')) ui.auth.name=String(d.get('name')); } ui.auth.mode=el.dataset.v; ui.auth.err=''; ui.auth.msg=''; render(); },
+  authShow:el=>{ const i=$('#pwIn'); if(!i) return; const show=i.type==='password'; i.type=show?'text':'password'; el.textContent=show?'🙈':'👁️'; },
+  localMode:()=>{ try{ localStorage.setItem('glowfit-localmode','1'); }catch(e){} enterLocal(); },
+  toAuth:()=>{ try{ localStorage.removeItem('glowfit-localmode'); }catch(e){} S=null; render(); },
+  logout:async()=>{ if(!confirm('¿Cerrar sesión? Tus datos siguen guardados en la nube.')) return; await push(); await SB.auth.signOut(); onLogout(); },
+  changePw:()=>newPasswordModal(),
   onbNext:()=>{ if(ui.onb===0){ const n=$('#onbName').value.trim(); if(!n){ toast('Escribe tu nombre 💖'); return;} ui.onbData.name=n; } ui.onb++; render(); },
   onbDay:el=>{ const d=+el.dataset.v, a=ui.onbData.days; ui.onbData.days=a.includes(d)?a.filter(x=>x!==d):[...a,d]; render(); },
   onbLvl:el=>{ ui.onbData.lvl=+el.dataset.v; render(); },
@@ -644,8 +815,8 @@ const A = {
   restSec:el=>{ S.restSec=+el.dataset.v; save(); render(); },
   rename:()=>{ const n=prompt('¿Cómo te llamo?', S.profile.name); if(n&&n.trim()){ S.profile.name=n.trim(); save(); render(); } },
   export:()=>{ const b=new Blob([JSON.stringify(S,null,1)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='glowfit-copia-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); toast('💾 Copia descargada (las fotos se quedan en el móvil)'); },
-  import:()=>{ const i=document.createElement('input'); i.type='file'; i.accept='.json,application/json'; i.onchange=async()=>{ try{ const d=JSON.parse(await i.files[0].text()); if(!d.v||!d.profile) throw 0; if(!confirm('Esto reemplaza tus datos actuales. ¿Seguir?')) return; S=Object.assign(fresh(),d); save(); render(); toast('📥 ¡Datos restaurados!'); }catch(e){ toast('⚠️ Ese archivo no es una copia de GlowFit'); } }; i.click(); },
-  reset:()=>{ if(confirm('¿Seguro? Se borra todo (menos las fotos).') && confirm('¿Segurísima? 🥺')){ localStorage.removeItem(KEY); S=fresh(); ui.onb=0; render(); } },
+  import:()=>{ const i=document.createElement('input'); i.type='file'; i.accept='.json,application/json'; i.onchange=async()=>{ try{ const d=JSON.parse(await i.files[0].text()); if(!d.v||!d.profile) throw 0; if(!confirm('Esto reemplaza tus datos actuales. ¿Seguir?')) return; const old=S.workouts.filter(w=>w._s).map(w=>w.id); S=Object.assign(fresh(),d); S.workouts.forEach(w=>delete w._s); S._del=old.filter(id=>!S.workouts.some(w=>w.id===id)); save(); render(); toast('📥 ¡Datos restaurados!'); }catch(e){ toast('⚠️ Ese archivo no es una copia de GlowFit'); } }; i.click(); },
+  reset:()=>{ if(confirm('¿Seguro? Se borran tus entrenos y tu progreso (las fotos se quedan).') && confirm('¿Segurísima? 🥺')){ const ids=S.workouts.filter(w=>w._s).map(w=>w.id); S=fresh(); S._del=ids; ui.onb=0; if(USER&&USER.user_metadata&&USER.user_metadata.name){ ui.onbData.name=USER.user_metadata.name; ui.onb=1; } save(); render(); } },
   // workout
   adj:el=>{ const s=S.active.entries[+el.dataset.e].sets[+el.dataset.s], f=el.dataset.f; s[f]=Math.max(0, +(num(s[f])+ +el.dataset.v).toFixed(2)); save(); render(); },
   tick:el=>{ const ei=+el.dataset.e, si=+el.dataset.s; if(ui.holdT&&ui.holdT.e===ei&&ui.holdT.s===si) stopHold(); const s=S.active.entries[ei].sets[si]; s.done=!s.done; save(); render(); if(s.done){ buzz(40); toast('+10 XP ✨'); const all=S.active.entries.every(e=>e.sets.every(x=>x.done)); if(all){ stopRest(); toast('🎉 ¡Todo hecho! Pulsa Terminar'); } else startRest(); } },
@@ -657,7 +828,7 @@ const A = {
   restSkip:()=>stopRest(),
   finish:()=>finishWorkout(),
   cancelWo:()=>{ if(confirm('¿Cancelar el entreno? No se guardará.')){ S.active=null; ui.holdT=null; stopRest(); save(); render(); } },
-  delW:el=>{ if(confirm('¿Borrar este entreno del historial?')){ S.workouts=S.workouts.filter(w=>w.id!==el.dataset.v); save(); render(); } },
+  delW:el=>{ if(confirm('¿Borrar este entreno del historial?')){ const w=S.workouts.find(w=>w.id===el.dataset.v); if(w&&w._s) S._del.push(w.id); S.workouts=S.workouts.filter(w=>w.id!==el.dataset.v); save(); render(); } },
   addPhoto:()=>pickPhoto(),
   photo:async el=>{ const p=(await allPhotos()).find(x=>x.id===el.dataset.v); if(!p) return; modal(`<img src="${p.data}" alt="" style="width:100%;border-radius:18px"><p class="center name mt">${new Date(p.date).toLocaleDateString('es-ES',{day:'numeric',month:'long',year:'numeric'})}</p><button class="btn ghost mt" data-a="delPhoto" data-v="${p.id}">🗑️ Borrar foto</button>`); },
   delPhoto:async el=>{ if(!confirm('¿Borrar esta foto?')) return; await delPhoto(el.dataset.v); await refreshPhotoStats(); closeModal(); render(); },
@@ -674,11 +845,37 @@ document.addEventListener('input', e=>{
   if(el.dataset.in==='set'){ const s=S.active.entries[+el.dataset.e].sets[+el.dataset.s]; s[el.dataset.f]=el.value; if(el.dataset.f==='t'&&ui.holdT&&ui.holdT.e===+el.dataset.e&&ui.holdT.s===+el.dataset.s) ui.holdT=null; save(); }
   if(el.dataset.in==='libQ'){ ui.libQ=el.value; const pos=el.selectionStart; const t=$('.sheet [data-a="newEx"]')?.dataset.v||''; libraryModal(t); const n=$('#libQ'); n.focus(); n.setSelectionRange(pos,pos); }
 });
+document.addEventListener('submit', async e=>{
+  if(e.target.id==='authForm'){ e.preventDefault(); submitAuth(e.target); }
+  if(e.target.id==='pwForm'){ e.preventDefault(); const pw=String(new FormData(e.target).get('password')||'');
+    if(pw.length<8){ toast('Mínimo 8 caracteres 🔑'); return; }
+    const {error}=await SB.auth.updateUser({password:pw}); if(error){ toast(authErr(error)); return; }
+    closeModal(); toast('🔑 ¡Contraseña cambiada!'); }
+});
 document.addEventListener('change', e=>{ if(e.target.dataset.in==='chartEx'){ ui.chartEx=e.target.value; render(); } });
 document.addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.id==='onbName') A.onbNext(); });
 
-refreshPhotoStats().then(()=>{ if(S.profile) sweep(true); render(); });
-render();
+/* ---------- arranque ---------- */
+function boot(){
+  if(CLOUD){
+    SB.auth.onAuthStateChange((ev, session)=>{
+      setTimeout(()=>{   // fuera del callback (recomendado por Supabase)
+        if(ev==='PASSWORD_RECOVERY') newPasswordModal();
+        if(session && session.user && (ev==='INITIAL_SESSION' || ev==='SIGNED_IN')) onLogin(session.user);
+        else if(ev==='INITIAL_SESSION'){ ui.booting=false; render(); }
+        if(ev==='SIGNED_OUT' && USER) onLogout();
+      }, 0);
+    });
+    setTimeout(()=>{ if(ui.booting && !USER){ ui.booting=false; render(); } }, 8000);
+  } else {
+    let local=false; try{ local=localStorage.getItem('glowfit-localmode')==='1'; }catch(e){}
+    if(local) enterLocal(); else { ui.booting=false; }
+  }
+  render();
+}
+window.addEventListener('online', ()=>schedulePush());
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') push(); });
+boot();
 if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
