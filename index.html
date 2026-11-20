@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>GlowFit</title>
+<title>GirlGym</title>
 <meta name="theme-color" content="#FF5FA2">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="GlowFit">
+<meta name="apple-mobile-web-app-title" content="GirlGym">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -198,7 +198,7 @@ details summary::-webkit-details-marker{display:none}
 
 <script>
 /* =========================================================
-   GlowFit 💖 — entrena, consigue tu primera dominada y brilla
+   GirlGym 💖 — entrena, consigue tu primera dominada y brilla
    Todo se guarda en tu móvil (localStorage + IndexedDB fotos)
    ========================================================= */
 const KEY = 'glowfit-v1';
@@ -319,6 +319,8 @@ const BADGES = [
   {id:'pullup5',e:'💎', t:'5 dominadas'},
   {id:'soft',   e:'🌸', t:'Escuché a mi cuerpo'},
   {id:'period', e:'🩸', t:'Entrené con la regla'},
+  {id:'friend1',e:'👯‍♀️', t:'Primera amiga'},
+  {id:'cheer5', e:'💌', t:'5 ánimos enviados'},
 ];
 
 /* ---------- estado ---------- */
@@ -327,7 +329,7 @@ let USER = null;   // usuaria de Supabase
 const ui = {tab:'hoy', chartEx:null, holdT:null, restEnd:0, onb:0, onbData:{name:'',days:[1,3,5],lvl:0}, booting:true, sync:'ok', auth:{mode:'login',email:'',name:'',busy:false,err:'',msg:''}};
 let photosThisWeek = 0;
 
-function fresh(){ return {v:1, profile:null, exercises:JSON.parse(JSON.stringify(DEFAULT_EX)), plan:{}, workouts:[], xp:0, badges:{}, road:{}, challenges:{}, active:null, restSec:90, _t:0, _del:[], cycle:{on:false,asked:false,hormonal:false,len:28,plen:5,periods:[]}, videos:[], rest:{}}; }
+function fresh(){ return {v:1, profile:null, exercises:JSON.parse(JSON.stringify(DEFAULT_EX)), plan:{}, workouts:[], xp:0, badges:{}, road:{}, challenges:{}, active:null, restSec:90, _t:0, _del:[], cycle:{on:false,asked:false,hormonal:false,len:28,plen:5,periods:[]}, videos:[], rest:{}, social:{share:true, sent:0}}; }
 const storeKey = () => USER ? KEY+':'+USER.id : KEY+':local';
 function load(){ try{ const s = JSON.parse(localStorage.getItem(storeKey())); if(s && s.v) return Object.assign(fresh(), s); }catch(e){} return fresh(); }
 function legacy(){ for(const k of [KEY, KEY+':local']){ try{ const s=JSON.parse(localStorage.getItem(k)); if(s && s.profile) return {k,s}; }catch(e){} } return null; }
@@ -390,11 +392,12 @@ async function onLogin(user){
   if(!S.profile){ ui.onb = 0; const n = user.user_metadata && user.user_metadata.name; if(n){ ui.onbData.name = n; ui.onb = 1; } }
   writeLocal(); schedulePush();
   await refreshPhotoStats(); if(S.profile) sweep(true);
+  loadSocial();
   render();
 }
 function onLogout(){
   stopHold(); stopRest(); clearTimeout(pushT);
-  USER = null; S = null; photoCache = null; ui.tab = 'hoy'; ui.onb = 0; ui.onbData = {name:'',days:[1,3,5],lvl:0};
+  USER = null; S = null; photoCache = null; ui.soc = null; ui.tab = 'hoy'; ui.onb = 0; ui.onbData = {name:'',days:[1,3,5],lvl:0};
   ui.auth = {mode:'login', email:ui.auth.email, name:'', busy:false, err:'', msg:''};
   closeModal(); render();
 }
@@ -409,7 +412,7 @@ function authErr(e){
   const m = String((e && (e.message || e.error_description)) || e || '');
   if(/invalid login/i.test(m)) return 'Email o contraseña incorrectos 🙈';
   if(/already registered|already been registered|exists/i.test(m)) return 'Ya hay una cuenta con ese email. Prueba a entrar 💖';
-  if(/not confirmed/i.test(m)) return 'Aún no has confirmado tu email. Busca el correo de GlowFit (mira en spam) 💌';
+  if(/not confirmed/i.test(m)) return 'Aún no has confirmado tu email. Busca el correo de GirlGym (mira en spam) 💌';
   if(/password/i.test(m) && /6|8|least|short|weak/i.test(m)) return 'Esa contraseña es muy corta o fácil. Usa al menos 8 caracteres.';
   if(/rate|too many|security purposes/i.test(m)) return 'Demasiados intentos. Espera un minutito y vuelve a probar ⏳';
   if(/fetch|network|failed/i.test(m)) return 'No hay conexión. Revisa tu internet 📶';
@@ -472,14 +475,14 @@ function buzz(p){ try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} }
 function checkRoad(){ const got=[]; for(const r of ROAD){ if(S.road[r.id]) continue; if(bestOf(r.ex)>=r.v){ S.road[r.id]=Date.now(); addXP(150); got.push(r); } } return got; }
 function earnedBadges(){
   const W=S.workouts, n=W.length, prs=W.reduce((a,w)=>a+(w.prs||[]).length,0), st=streak(), hrs=W.reduce((a,w)=>a+dur(w),0)/36e5, vol=W.reduce((a,w)=>a+volume(w),0), ch=Object.values(S.challenges).filter(c=>c.done).length, roadN=Object.keys(S.road).length;
-  return {first:n>=1,w5:n>=5,w10:n>=10,w25:n>=25,w50:n>=50,pr1:prs>=1,pr10:prs>=10,streak3:st>=3,streak8:st>=8,hours5:hrs>=5,ton:vol>=10000,soft:W.some(w=>w.meta&&w.meta.soft),period:W.some(w=>w.meta&&w.meta.phase==='menstrual'),photo:photoCount>0,ch1:ch>=1,ch5:ch>=5,hang60:bestOf('hang')>=60,road4:roadN>=4,pullup:!!S.road.r8||bestOf('pull')>=1,pullup5:bestOf('pull')>=5};
+  return {first:n>=1,w5:n>=5,w10:n>=10,w25:n>=25,w50:n>=50,pr1:prs>=1,pr10:prs>=10,streak3:st>=3,streak8:st>=8,hours5:hrs>=5,ton:vol>=10000,soft:W.some(w=>w.meta&&w.meta.soft),period:W.some(w=>w.meta&&w.meta.phase==='menstrual'),photo:photoCount>0,ch1:ch>=1,ch5:ch>=5,hang60:bestOf('hang')>=60,road4:roadN>=4,pullup:!!S.road.r8||bestOf('pull')>=1,pullup5:bestOf('pull')>=5,friend1:!!(ui.soc&&ui.soc.friends&&ui.soc.friends.some(f=>f.status==='accepted')),cheer5:((S.social||{}).sent||0)>=5};
 }
 function checkBadges(){ const e=earnedBadges(), got=[]; for(const b of BADGES){ if(e[b.id] && !S.badges[b.id]){ S.badges[b.id]=Date.now(); addXP(100); got.push(b);} } return got; }
 function curChallenge(){ const k=weekKey(Date.now()); return S.challenges[k]; }
 function challengeOptions(){ const k=weekKey(Date.now()); let h=0; for(const c of k) h=(h*31+c.charCodeAt(0))>>>0; const pool=[...CHALLENGES]; const out=[]; while(out.length<3){ h=(h*1103515245+12345)>>>0; out.push(pool.splice(h%pool.length,1)[0]); } return out; }
 function challengeProgress(c){ const def=CHALLENGES.find(x=>x.id===c.id); return {def, val:Math.min(def.goal, def.m(thisWeekW()))}; }
 function checkChallenge(){ const c=curChallenge(); if(!c||c.done) return null; const p=challengeProgress(c); if(p.val>=p.def.goal){ c.done=Date.now(); addXP(120); return p.def; } return null; }
-function sweep(silent){ const r=checkRoad(), c=checkChallenge(), b=checkBadges(); save(); if(!silent){ const msgs=[...r.map(x=>x.e+' Camino: '+x.t), ...(c?['🎯 ¡Reto conseguido! '+c.t]:[]), ...b.map(x=>x.e+' Insignia: '+x.t)]; msgs.forEach((m,i)=>setTimeout(()=>toast(m),i*1400)); if(msgs.length) confetti(); } return {r,c,b}; }
+function sweep(silent){ const r=checkRoad(), c=checkChallenge(), b=checkBadges(); save(); r.forEach(x=>postActivity('road','',{id:x.id})); b.forEach(x=>postActivity('badge','',{id:x.id})); if(!silent){ const msgs=[...r.map(x=>x.e+' Camino: '+x.t), ...(c?['🎯 ¡Reto conseguido! '+c.t]:[]), ...b.map(x=>x.e+' Insignia: '+x.t)]; msgs.forEach((m,i)=>setTimeout(()=>toast(m),i*1400)); if(msgs.length) confetti(); } return {r,c,b}; }
 
 /* =========================================================
    VISTAS
@@ -491,16 +494,17 @@ function render(){
   if(!S.profile){ app.innerHTML=viewOnb(); return; }
   if(S.active && ui.woCoach){ app.innerHTML=`<div class="wrap" style="padding-bottom:0;position:sticky;top:0;z-index:25;padding-top:calc(10px + env(safe-area-inset-top))"><button class="btn sm lila" data-a="backToWo">← Volver al entreno (${fmtT(activeMs(S.active))})</button></div>`+viewCoach()+'<style>.chatbar{bottom:calc(16px + env(safe-area-inset-bottom))}</style>'; const c=$('#chatEnd'); if(c) c.scrollIntoView({block:'end'}); return; }
   if(S.active){ app.innerHTML=viewWorkout(); tick(); return; }
-  const v={hoy:viewHoy,plan:viewPlan,coach:viewCoach,logros:viewLogros,datos:viewDatos}[ui.tab]();
+  const v={hoy:viewHoy,plan:viewPlan,amigas:viewAmigas,coach:viewCoach,logros:viewLogros,datos:viewDatos}[ui.tab]();
   app.innerHTML = v + nav();
   if(ui.tab==='coach'){ const c=$('#chatEnd'); if(c) c.scrollIntoView({block:'end'}); }
   if(ui.tab==='datos') loadPhotos();
 }
 function nav(){
   const b=(id,ic,l)=>`<button class="${ui.tab===id?'on':''}" data-a="tab" data-v="${id}"><span class="ic">${ic}</span>${l}</button>`;
-  return `<nav class="bottom">${b('hoy','🏠','Hoy')}${b('plan','🗓️','Plan')}${b('coach','💬','Coach')}${b('logros','🏆','Logros')}${b('datos','📈','Progreso')}</nav>`;
+  const n=socialBadge(), yo=ui.tab==='logros'||ui.tab==='datos';
+  return `<nav class="bottom">${b('hoy','🏠','Hoy')}${b('plan','🗓️','Plan')}<button class="${ui.tab==='amigas'?'on':''}" data-a="tab" data-v="amigas" style="position:relative"><span class="ic">👯‍♀️</span>Amigas${n?`<span style="position:absolute;top:2px;right:14%;background:var(--pink);color:#fff;border-radius:99px;font-size:10px;min-width:18px;height:18px;line-height:18px;padding:0 4px">${n}</span>`:''}</button>${b('coach','💬','Coach')}<button class="${yo?'on':''}" data-a="tab" data-v="${ui.yoTab||'logros'}"><span class="ic">🌟</span>Yo</button></nav>`;
 }
-function header(title, sub){ const L=level(S.xp); return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="chip-xp">${USER?`<span id="syncDot" title="Nube">${syncIcon()}</span> `:''}✨ ${S.xp} XP</div></div>`; }
+function header(title, sub){ const yo=ui.tab==='logros'||ui.tab==='datos'; return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="chip-xp">${USER?`<span id="syncDot" title="Nube">${syncIcon()}</span> `:''}✨ ${S.xp} XP</div></div>${yo?`<div class="seg" style="margin-bottom:14px"><button class="${ui.tab==='logros'?'on':''}" data-a="tab" data-v="logros">🏆 Logros</button><button class="${ui.tab==='datos'?'on':''}" data-a="tab" data-v="datos">📈 Progreso</button></div>`:''}`; }
 
 /* ---------- Check-in de energía ---------- */
 function checkin(day, o={}){ ui.ci={day, sym:[], step:1, o}; ciRender(); }
@@ -587,6 +591,106 @@ function coachHelp(ei){
     <p class="tiny mt2">Tu entreno sigue en marcha. Vuelve con la pestaña de abajo o el botón "Volver al entreno".</p>`);
 }
 
+/* ---------- Amigas 👯‍♀️ ---------- */
+const QUESTIONS = ['¿Cuál ha sido tu pequeña victoria de esta semana? 🏆','¿Qué ejercicio te está costando más ahora mismo? 🤔','¿Qué canción te pone a tope en el gym? 🎧',
+  '¿Qué le dirías a tu yo del primer día de gym? 💌','¿Cómo te vas a mimar después de entrenar? 🛁','¿Qué reto os apetece hacer juntas? 👯‍♀️',
+  '¿Qué es lo que más te gusta de cómo te sientes al entrenar? ✨','Del 1 al 10, ¿cuánta energía tienes esta semana? ¿Por qué? 🔋'];
+const CHEERS = ['¡Tú puedes! 💪','Hoy vas a brillar ✨','Estoy orgullosa de ti 💖','¡A por esa dominada! 👑','Descansa, te lo has ganado 💤','¡Vamos juntas! 👯‍♀️'];
+const AVATARS = ['🌸','🦋','🌙','⭐','🍓','🌷','🐱','🦄','🔥','💎','🍑','🌈'];
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-8xxx-xxxxxxxxxxxx'.replace(/x/g,()=>(Math.random()*16|0).toString(16)));
+const genCode = () => Array.from({length:6},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
+const weekIdx = () => Math.floor(weekStart(Date.now())/(7*864e5));
+const curQ = () => QUESTIONS[weekIdx()%QUESTIONS.length];
+function fmtAgo(t){ t=typeof t==='string'?Date.parse(t):t; const m=Math.round((Date.now()-t)/60000); if(m<1) return 'ahora'; if(m<60) return `hace ${m} min`; const h=Math.round(m/60); if(h<24) return `hace ${h} h`; if(h<48) return 'ayer'; return fmtD(t); }
+function who(id){ const s=ui.soc||{}; if(s.me&&id===s.me.user_id) return {name:'Tú',emoji:s.me.emoji,me:true}; const f=(s.friends||[]).find(x=>x.id===id); return f?{name:f.name,emoji:f.emoji}:{name:'Amiga',emoji:'🌸'}; }
+function socialBadge(){ const s=ui.soc; if(!s||!s.loaded) return 0; return (s.cheers||[]).filter(c=>!c.read_at).length + (s.friends||[]).filter(f=>f.status==='pending'&&f.incoming).length; }
+
+async function loadSocial(){
+  if(!SB||!USER||!S||!S.profile) return; const uid=USER.id; ui.socAt=Date.now();
+  try{
+    let me=(await SB.from('friend_profiles').select('*').eq('user_id',uid).maybeSingle()).data;
+    if(!me){ for(let i=0;i<5&&!me;i++){ const row={user_id:uid, name:S.profile.name.slice(0,40), emoji:'🌸', code:genCode()}; const r=await SB.from('friend_profiles').insert(row); if(!r.error) me=row; } if(!me) throw new Error('no profile'); }
+    else if(me.name!==S.profile.name){ await SB.from('friend_profiles').update({name:S.profile.name.slice(0,40)}).eq('user_id',uid); me.name=S.profile.name; }
+    const [a,b]=await Promise.all([SB.from('friendships').select('*').eq('requester',uid), SB.from('friendships').select('*').eq('addressee',uid)]);
+    const fs=[...(a.data||[]),...(b.data||[])], ids=fs.map(f=>f.requester===uid?f.addressee:f.requester);
+    const profs=ids.length?((await SB.from('friend_profiles').select('user_id,name,emoji').in('user_id',ids)).data||[]):[];
+    const friends=fs.map(f=>{ const id=f.requester===uid?f.addressee:f.requester, p=profs.find(x=>x.user_id===id)||{name:'Amiga',emoji:'🌸'}; return {id, fid:f.id, status:f.status, incoming:f.addressee===uid, name:p.name, emoji:p.emoji}; });
+    const acc=friends.filter(f=>f.status==='accepted').map(f=>f.id);
+    const posts=(await SB.from('posts').select('*').in('user_id',[uid,...acc]).order('created_at',{ascending:false}).limit(40)).data||[];
+    const pids=posts.map(p=>p.id), none={data:[]};
+    const [rp,rc,ch]=await Promise.all([pids.length?SB.from('post_replies').select('*').in('post_id',pids).order('created_at'):none, pids.length?SB.from('post_reactions').select('*').in('post_id',pids):none,
+      SB.from('cheers').select('*').eq('to_user',uid).order('created_at',{ascending:false}).limit(30)]);
+    ui.soc={me, friends, posts, replies:rp.data||[], reactions:rc.data||[], cheers:ch.data||[], loaded:true, err:false};
+    if(S.profile){ const nb=checkBadges(); nb.forEach(x=>{ toast(x.e+' Insignia: '+x.t); postActivity('badge','',{id:x.id}); }); if(nb.length) save(); }
+  }catch(e){ console.warn('social',e); ui.soc={...(ui.soc||{}), loaded:true, err:true}; }
+  if(!S || S.active || $('.ov')) return;
+  if(['amigas','hoy'].includes(ui.tab)) render(); else { const n=$('nav.bottom'); if(n) n.outerHTML=nav(); }
+}
+async function postActivity(kind, text, data){
+  if(!SB||!USER||!S||!(S.social||{}).share&&kind!=='answer') return;
+  try{ await SB.from('posts').insert({id:uuid(), user_id:USER.id, kind, text:text||null, data:data||{}}); }catch(e){ console.warn('post',e); }
+}
+function postHtml(p){
+  const w=who(p.user_id), d=p.data||{}; let body='';
+  if(p.kind==='workout') body=`💪 <b>${esc(w.name)}</b> ${w.me?'has':'ha'} completado <b>${esc(d.title||'un entreno')}</b>${d.min?` · ${d.min} min`:''}${d.prs?` · 🏆 ${d.prs} récord${d.prs>1?'s':''}`:''}`;
+  else if(p.kind==='badge'){ const b=BADGES.find(x=>x.id===d.id)||{e:'🏅',t:'una insignia'}; body=`${b.e} <b>${esc(w.name)}</b> ${w.me?'has':'ha'} conseguido la insignia <b>${b.t}</b>`; }
+  else if(p.kind==='road'){ const r=ROAD.find(x=>x.id===d.id)||{e:'✨',t:'un paso'}; body= d.id==='r8'?`👑 <b>¡${esc(w.name.toUpperCase())} ${w.me?'HAS':'HA'} HECHO SU PRIMERA DOMINADA!</b>`:`${r.e} <b>${esc(w.name)}</b> ${w.me?'avanzas':'avanza'} hacia la dominada: <b>${r.t}</b>`; }
+  else if(p.kind==='answer') body=`<div class="tiny">${w.me?'TU RESPUESTA':esc(w.name.toUpperCase())+' RESPONDIÓ'} · ${esc(QUESTIONS[d.q]||'')}</div><div class="mt" style="font-size:16px">${esc(p.text||'')}</div>`;
+  const rs=(ui.soc.reactions||[]).filter(r=>r.post_id===p.id), mine=rs.find(r=>r.user_id===USER.id), reps=(ui.soc.replies||[]).filter(r=>r.post_id===p.id), open=ui.openPost===p.id;
+  return `<div class="card" style="padding:14px">
+    <div class="row" style="align-items:flex-start"><div class="emo" style="font-size:24px">${w.emoji}</div><div class="grow"><div>${body}</div><div class="tiny mt" style="margin-top:4px">${fmtAgo(p.created_at)}</div></div></div>
+    <div class="row mt" style="gap:6px">${['💖','🔥','👏'].map(e=>{ const n=rs.filter(r=>r.emoji===e).length; return `<button class="pill ${mine&&mine.emoji===e?'pk':''}" style="padding:6px 10px;font-size:14px${mine&&mine.emoji===e?';outline:2px solid var(--pink)':''}" data-a="react" data-v="${p.id}" data-e="${e}">${e}${n?' '+n:''}</button>`; }).join('')}
+      <button class="link" style="margin-left:auto;font-size:13px" data-a="openPost" data-v="${p.id}">💬 ${reps.length?reps.length+' ':''}Responder</button></div>
+    ${reps.length||open?`<div style="margin-top:10px;padding-left:10px;border-left:3px solid var(--line)">${reps.map(r=>{ const x=who(r.user_id); return `<div style="padding:4px 0"><b>${x.emoji} ${esc(x.name)}</b> <span class="tiny">${fmtAgo(r.created_at)}</span><div>${esc(r.text)}</div></div>`; }).join('')}
+      ${open?`<form class="row mt" data-reply="${p.id}" style="gap:6px"><input class="field" name="t" placeholder="Escribe algo bonito…" maxlength="300" autocomplete="off" style="padding:10px 12px;font-size:15px"><button class="btn sm" type="submit">➤</button></form>`:''}</div>`:''}
+  </div>`;
+}
+function cheerBanner(){
+  const s=ui.soc; if(!s||!s.loaded) return ''; const c=(s.cheers||[]).find(x=>!x.read_at); if(!c) return '';
+  const w=who(c.from_user), more=s.cheers.filter(x=>!x.read_at).length-1;
+  return `<div class="card" style="background:linear-gradient(135deg,#FFF0F7,#F1E9FF);border:2px solid var(--line)"><div class="row"><span style="font-size:34px">💌</span><div class="grow"><div class="tiny">${esc(w.name).toUpperCase()} TE MANDA ÁNIMO ${w.emoji}</div><div class="name" style="font-size:18px">${esc(c.text)}</div></div></div>
+    <div class="row mt" style="gap:8px"><button class="btn sm" data-a="readCheer" data-v="${c.id}">Gracias 💖</button><button class="btn sm ghost" data-a="cheerTo" data-v="${c.from_user}">Devolver ánimo</button>${more>0?`<span class="tiny">+${more} más</span>`:''}</div></div>`;
+}
+function viewAmigas(){
+  const s=ui.soc;
+  if(!SB||!USER) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card soft center"><span class="big-emo">👯‍♀️</span><h3>Entrena con tus amigas</h3><p class="muted">Cuando conectes tu cuenta podrás añadir amigas, ver sus logros, responder la pregunta de la semana y mandaros mensajes de ánimo.</p></div></div>`;
+  if(!s||!s.loaded) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card center"><span class="big-emo" style="animation:pulse 1.2s infinite">👯‍♀️</span><p class="muted">Cargando…</p></div></div>`;
+  if(s.err&&!s.me) return `<div class="wrap">${header('Amigas 👯‍♀️')}<div class="card center"><p class="muted">No he podido cargar tus amigas 📶</p><button class="btn sm mt" data-a="socReload">Reintentar</button></div></div>`;
+  const acc=s.friends.filter(f=>f.status==='accepted'), inc=s.friends.filter(f=>f.status==='pending'&&f.incoming), out=s.friends.filter(f=>f.status==='pending'&&!f.incoming);
+  const wk=weekStart(Date.now()), qi=weekIdx()%QUESTIONS.length, myAns=s.posts.find(p=>p.kind==='answer'&&p.user_id===USER.id&&(p.data||{}).q===qi&&Date.parse(p.created_at)>=wk);
+  const ans=s.posts.filter(p=>p.kind==='answer'&&(p.data||{}).q===qi&&Date.parse(p.created_at)>=wk);
+  const feed=s.posts.filter(p=>!(p.kind==='answer'&&ans.includes(p)));
+  return `<div class="wrap">${header('Amigas 👯‍♀️','Más fuertes juntas')}
+    ${cheerBanner()}
+    ${inc.map(f=>`<div class="card soft"><div class="row"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">Quiere ser tu amiga en GirlGym</div></div></div>
+      <div class="row mt" style="gap:8px"><button class="btn sm" data-a="acceptF" data-v="${f.fid}">Aceptar 💖</button><button class="btn sm ghost" data-a="removeF" data-v="${f.fid}">Ahora no</button></div></div>`).join('')}
+    <div class="card"><div class="row between"><div><div class="tiny">TU CÓDIGO DE AMIGA</div><div class="f" style="font-size:28px;letter-spacing:3px;color:var(--pink-d)">${s.me.code}</div></div><button class="emo" style="font-size:28px;width:52px;height:52px" data-a="avatar" aria-label="Cambiar avatar">${s.me.emoji}</button></div>
+      <div class="row mt" style="gap:8px"><button class="btn sm lila" data-a="shareCode">📤 Invitar amiga</button><button class="btn sm ghost" data-a="addFriend">＋ Añadir con código</button></div></div>
+    ${acc.length?`<div class="card"><h3>Mis amigas</h3>${acc.map(f=>{ const n=s.posts.filter(p=>p.user_id===f.id&&p.kind==='workout'&&Date.parse(p.created_at)>=wk).length; return `<div class="item"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">${n?`💪 ${n} entreno${n>1?'s':''} esta semana`:'Aún sin entrenos esta semana'}</div></div><button class="btn sm" data-a="cheerTo" data-v="${f.id}">💌 Ánimo</button></div>`; }).join('')}
+      ${out.length?`<p class="tiny mt">Pendientes: ${out.map(f=>esc(f.name)).join(', ')}</p>`:''}</div>`
+    :`<div class="card soft center"><span class="big-emo">💌</span><p class="muted">Invita a tus amigas con tu código y os iréis animando 💖</p>${out.length?`<p class="tiny mt">Esperando a: ${out.map(f=>esc(f.name)).join(', ')}</p>`:''}</div>`}
+    <div class="card" style="background:linear-gradient(135deg,#FF7DB4,#C49BFF);color:#fff"><div class="tiny" style="color:#fff">PREGUNTA DE LA SEMANA</div><h2 style="margin-top:4px">${curQ()}</h2>
+      ${myAns?`<p class="mt" style="opacity:.95">Tu respuesta: <b>${esc(myAns.text)}</b></p>`:`<form id="answerForm" class="row mt" style="gap:6px"><input class="field" name="t" placeholder="Tu respuesta…" maxlength="300" autocomplete="off"><button class="btn sm white" type="submit">➤</button></form>`}</div>
+    ${ans.map(postHtml).join('')}
+    <div class="row between mt2" style="margin-bottom:10px"><h3 style="margin:0">Actividad</h3><button class="link" data-a="socReload">↻ Actualizar</button></div>
+    ${feed.length?feed.map(postHtml).join(''):'<p class="muted center">Aquí verás los entrenos y logros de tus amigas ✨</p>'}
+    <div class="card mt2"><div class="row between"><div class="grow"><div class="name">Compartir mi actividad</div><div class="tiny">Entrenos, insignias y pasos hacia la dominada. Tu ciclo y tus fotos nunca se comparten 🔒</div></div>
+      <div class="seg" style="width:120px"><button class="${S.social.share?'on':''}" data-a="shareAct" data-v="1">Sí</button><button class="${!S.social.share?'on':''}" data-a="shareAct" data-v="0">No</button></div></div></div>
+  </div>`;
+}
+function cheerModal(id){
+  const w=who(id);
+  modal(`<span class="big-emo">💌</span><h2 class="center">Ánimo para ${esc(w.name)}</h2>
+    <div class="row mt2" style="flex-wrap:wrap;gap:8px;justify-content:center">${CHEERS.map(c=>`<button class="pill pk" style="padding:10px 14px;font-size:15px" data-a="sendCheer" data-v="${id}" data-t="${esc(c)}">${c}</button>`).join('')}</div>
+    <form id="cheerForm" data-to="${id}" class="row mt2" style="gap:6px"><input class="field" name="t" placeholder="O escribe tu mensaje…" maxlength="200" autocomplete="off"><button class="btn sm" type="submit">➤</button></form>`);
+}
+async function sendCheer(to, text){
+  text=String(text||'').trim(); if(!text) return;
+  const r=await SB.from('cheers').insert({id:uuid(), from_user:USER.id, to_user:to, text:text.slice(0,200)});
+  if(r.error){ toast('⚠️ No se ha podido enviar'); return; }
+  S.social.sent=(S.social.sent||0)+1; closeModal(); toast(`💌 ¡Enviado a ${who(to).name}!`); buzz(30); save(); sweep(); loadSocial();
+}
+
 /* ---------- "Hoy no me apetece" ---------- */
 const ytId = u => { const m=String(u).match(/(?:youtu\.be\/|[?&]v=|shorts\/|embed\/|live\/)([\w-]{11})/); return m?m[1]:null; };
 function mehModal(){
@@ -639,11 +743,11 @@ function cycleCard(){
 function viewAuth(){
   const a=ui.auth, reg=a.mode==='signup', rec=a.mode==='forgot';
   const intro = rec ? 'Escribe tu email y te mandamos un enlace para crear una contraseña nueva.' : reg ? 'Crea tu cuenta y tus entrenos se guardarán en la nube ☁️' : '¡Hola de nuevo! Entra para seguir brillando ✨';
-  if(!CLOUD) return `<div class="wrap onb"><span class="big-emo">💖</span><h1 class="center" style="font-size:34px">GlowFit</h1>
+  if(!CLOUD) return `<div class="wrap onb"><span class="big-emo">💖</span><h1 class="center" style="font-size:34px">GirlGym</h1>
     <div class="hint mt2">⚙️ Las cuentas aún no están activadas: falta conectar la nube (Supabase) en <b>config.js</b>.</div>
     <p class="muted center mt">Mientras tanto puedes usar la app sin cuenta. Tus datos se quedan en este móvil y podrás pasarlos a tu cuenta más adelante.</p>
     <button class="btn mt2" data-a="localMode">Usar sin cuenta</button></div>`;
-  return `<div class="wrap onb"><span class="big-emo">💖</span><h1 class="center" style="font-size:34px">GlowFit</h1>
+  return `<div class="wrap onb"><span class="big-emo">💖</span><h1 class="center" style="font-size:34px">GirlGym</h1>
     <p class="muted center mt">${intro}</p>
     ${rec?'':`<div class="seg mt2"><button type="button" class="${!reg?'on':''}" data-a="authMode" data-v="login">Entrar</button><button type="button" class="${reg?'on':''}" data-a="authMode" data-v="signup">Crear cuenta</button></div>`}
     <form id="authForm" class="mt2" novalidate>
@@ -691,7 +795,7 @@ function newPasswordModal(){
 function viewOnb(){
   const d=ui.onbData;
   const steps=[
-    `<span class="big-emo">💖</span><h1 class="center" style="font-size:30px">¡Hola! Soy GlowFit</h1>
+    `<span class="big-emo">💖</span><h1 class="center" style="font-size:30px">¡Hola! Soy GirlGym</h1>
      <p class="muted center mt">Vamos a por tu <b>primera dominada</b>, paso a pasito y sin agobios.</p>
      <p class="muted center mt">¿Cómo te llamo?</p>
      <input class="field mt" id="onbName" placeholder="Tu nombre" value="${esc(d.name)}" autocomplete="off">
@@ -733,6 +837,7 @@ function viewHoy(){
   else { const pr=challengeProgress(c); ch=`<div class="card"><div class="row"><span style="font-size:30px">${pr.def.e}</span><div class="grow"><div class="tiny">RETO DE LA SEMANA ${c.done?'· ¡HECHO! ✅':''}</div><div class="name">${pr.def.t}</div></div></div><div class="bar mt"><i style="width:${pr.val/pr.def.goal*100}%"></i></div><div class="tiny mt" style="text-align:right">${Math.round(pr.val)}${pr.def.u||''} / ${pr.def.goal}${pr.def.u||''}</div></div>`; }
 
   return `<div class="wrap">${header(`${hi}, ${esc(p.name)}!`, new Date().toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'}))}
+  ${cheerBanner()}
   ${main}
   ${cycleCard()}
   <div class="card" data-a="tab" data-v="logros" style="cursor:pointer">
@@ -911,6 +1016,7 @@ function finishWorkout(){
   const xp=sets*10+50+w.prs.length*30; w.xp=xp; addXP(xp);
   const L0=level(S.xp-xp).l;
   S.workouts.push(w); S.active=null;
+  postActivity('workout','',{title:A.title.replace(/ · (5 min 🌱|suave 🌸)$/,''), min:Math.round(dur(w)/60000), sets, prs:w.prs.length});
   const res=sweep(true), L1=level(S.xp);
   const items=[
     ...w.prs.map(p=>`🏆 Récord en ${esc(ex(p.exId).name)}: <b>${p.v} ${unit(ex(p.exId).kind)}</b>`),
@@ -1000,7 +1106,7 @@ function pickPhoto(){
    ACCIONES
    ========================================================= */
 const A = {
-  tab:el=>{ ui.tab=el.dataset.v; render(); scrollTo(0,0); },
+  tab:el=>{ ui.tab=el.dataset.v; if(ui.tab==='logros'||ui.tab==='datos') ui.yoTab=ui.tab; if(ui.tab==='amigas') loadSocial(); render(); scrollTo(0,0); },
   authMode:el=>{ const f=$('#authForm'); if(f){ const d=new FormData(f); ui.auth.email=String(d.get('email')||ui.auth.email); if(d.has('name')) ui.auth.name=String(d.get('name')); } ui.auth.mode=el.dataset.v; ui.auth.err=''; ui.auth.msg=''; render(); },
   authShow:el=>{ const i=$('#pwIn'); if(!i) return; const show=i.type==='password'; i.type=show?'text':'password'; el.textContent=show?'🙈':'👁️'; },
   localMode:()=>{ try{ localStorage.setItem('glowfit-localmode','1'); }catch(e){} enterLocal(); },
@@ -1018,6 +1124,25 @@ const A = {
   ciEnergy:el=>{ ui.ci.energy=el.dataset.v; if(el.dataset.v==='low' || ui.ci.sym.length>=2){ ui.ci.step=2; ciRender(); } else A.ciGo({dataset:{v:'normal'}}); },
   ciGo:el=>{ const c=ui.ci; startWorkout(c.day, {...c.o, energy:c.energy||null, symptoms:c.sym, soft:c.o.soft||el.dataset.v==='soft'}); },
   meh:()=>mehModal(),
+  socReload:()=>{ ui.soc={...(ui.soc||{}),loaded:false}; render(); loadSocial(); },
+  shareCode:async()=>{ const c=ui.soc.me.code, t=`¡Entrena conmigo en GirlGym! 💖 Añádeme con mi código: ${c}`;
+    try{ if(navigator.share){ await navigator.share({title:'GirlGym', text:t, url:appUrl()}); return; } }catch(e){ return; }
+    try{ await navigator.clipboard.writeText(t+' '+appUrl()); toast('📋 Invitación copiada'); }catch(e){ toast('Tu código: '+c); } },
+  addFriend:()=>modal(`<span class="big-emo">👯‍♀️</span><h2 class="center">Añadir amiga</h2><p class="muted center">Pídele su código (lo tiene en su pestaña Amigas)</p>
+    <form id="friendForm" class="mt2"><input class="field center" name="c" placeholder="ABC123" maxlength="6" autocapitalize="characters" autocomplete="off" style="font-size:24px;letter-spacing:4px;text-transform:uppercase"><button class="btn mt" type="submit">Enviar solicitud 💌</button></form>`),
+  acceptF:async el=>{ const r=await SB.from('friendships').update({status:'accepted'}).eq('id',el.dataset.v); if(r.error){ toast('⚠️ No se pudo aceptar'); return; } confetti(30); toast('👯‍♀️ ¡Ya sois amigas!'); await loadSocial(); },
+  removeF:async el=>{ await SB.from('friendships').delete().eq('id',el.dataset.v); loadSocial(); },
+  cheerTo:el=>cheerModal(el.dataset.v),
+  sendCheer:el=>sendCheer(el.dataset.v, el.dataset.t),
+  readCheer:async el=>{ const c=ui.soc.cheers.find(x=>x.id===el.dataset.v); if(c) c.read_at=new Date().toISOString(); render(); await SB.from('cheers').update({read_at:new Date().toISOString()}).eq('id',el.dataset.v); },
+  react:async el=>{ const id=el.dataset.v, e=el.dataset.e, s=ui.soc, mine=s.reactions.find(r=>r.post_id===id&&r.user_id===USER.id);
+    s.reactions=s.reactions.filter(r=>!(r.post_id===id&&r.user_id===USER.id)); if(!mine||mine.emoji!==e) s.reactions.push({post_id:id,user_id:USER.id,emoji:e}); render(); buzz(15);
+    if(mine&&mine.emoji===e) await SB.from('post_reactions').delete().eq('post_id',id).eq('user_id',USER.id);
+    else await SB.from('post_reactions').upsert({post_id:id,user_id:USER.id,emoji:e}); },
+  openPost:el=>{ ui.openPost=ui.openPost===el.dataset.v?null:el.dataset.v; render(); const f=$(`[data-reply="${ui.openPost}"] input`); if(f) f.focus(); },
+  avatar:()=>modal(`<h2 class="center">Elige tu avatar</h2><div class="grid3 mt2" style="grid-template-columns:repeat(4,1fr)">${AVATARS.map(a=>`<button class="opt" style="justify-content:center;font-size:30px;margin:0" data-a="setAvatar" data-v="${a}">${a}</button>`).join('')}</div>`),
+  setAvatar:async el=>{ ui.soc.me.emoji=el.dataset.v; closeModal(); render(); await SB.from('friend_profiles').update({emoji:el.dataset.v}).eq('user_id',USER.id); },
+  shareAct:el=>{ S.social.share=el.dataset.v==='1'; save(); render(); toast(S.social.share?'✨ Tus amigas verán tus logros':'🔒 Tu actividad ya no se comparte'); },
   coachAsk:el=>coachSend(el.dataset.v),
   coachClear:()=>{ if(!confirm('¿Empezar una conversación nueva?')) return; S.chat=[]; save(); render(); },
   coachHelp:el=>{ if(!SB||!USER){ toast('El coach necesita tu cuenta conectada 💬'); return; } coachHelp(+el.dataset.e); },
@@ -1046,7 +1171,7 @@ const A = {
   roadTap:el=>{ const r=ROAD.find(x=>x.id===el.dataset.v);
     modal(`<span class="big-emo">${r.e}</span><h2 class="center">${r.t}</h2><p class="muted center">${r.tip}</p><p class="tiny center mt">Se marca solo cuando registras ${ex(r.ex).name.toLowerCase()} con ${r.v}${ex(r.ex).kind==='time'?' s':' reps'} o más.</p>
       ${S.road[r.id]?`<p class="center mt2 name">✅ Conseguido el ${fmtD(S.road[r.id])}</p><button class="link mt" style="display:block;margin:12px auto 0;color:var(--ink-3)" data-a="roadUndo" data-v="${r.id}">Desmarcar</button>`:`<button class="btn mt2" data-a="roadMark" data-v="${r.id}">¡Ya lo he conseguido! 🎉</button>`}`); },
-  roadMark:el=>{ S.road[el.dataset.v]=Date.now(); addXP(150); closeModal(); sweep(true); render(); confetti(); toast('+150 XP ✨'); if(el.dataset.v==='r8'){ setTimeout(()=>confetti(80),600); } },
+  roadMark:el=>{ S.road[el.dataset.v]=Date.now(); addXP(150); postActivity('road','',{id:el.dataset.v}); closeModal(); sweep(true); render(); confetti(); toast('+150 XP ✨'); if(el.dataset.v==='r8'){ setTimeout(()=>confetti(80),600); } },
   roadUndo:el=>{ delete S.road[el.dataset.v]; save(); closeModal(); render(); },
   toggleDay:el=>{ const d=+el.dataset.v, p=S.profile; if(p.days.includes(d)) p.days=p.days.filter(x=>x!==d); else { p.days.push(d); if(!S.plan[d]){ const t=TEMPLATES[p.days.length%TEMPLATES.length]; S.plan[d]={title:t.title,items:t.items.map(([exId,sets,reps])=>({exId,sets,reps}))}; } } save(); render(); },
   renameDay:el=>{ const d=el.dataset.v, n=prompt('Nombre del entreno:', S.plan[d].title); if(n&&n.trim()){ S.plan[d].title=n.trim(); save(); render(); } },
@@ -1067,8 +1192,8 @@ const A = {
   delEx:el=>{ if(!confirm('¿Borrar este ejercicio? Tu historial se mantiene.')) return; S.exercises=S.exercises.filter(e=>e.id!==el.dataset.id); for(const d in S.plan) S.plan[d].items=S.plan[d].items.filter(i=>i.exId!==el.dataset.id); save(); libraryModal(''); render(); },
   restSec:el=>{ S.restSec=+el.dataset.v; save(); render(); },
   rename:()=>{ const n=prompt('¿Cómo te llamo?', S.profile.name); if(n&&n.trim()){ S.profile.name=n.trim(); save(); render(); } },
-  export:()=>{ const b=new Blob([JSON.stringify(S,null,1)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='glowfit-copia-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); toast('💾 Copia descargada (las fotos se quedan en el móvil)'); },
-  import:()=>{ const i=document.createElement('input'); i.type='file'; i.accept='.json,application/json'; i.onchange=async()=>{ try{ const d=JSON.parse(await i.files[0].text()); if(!d.v||!d.profile) throw 0; if(!confirm('Esto reemplaza tus datos actuales. ¿Seguir?')) return; const old=S.workouts.filter(w=>w._s).map(w=>w.id); S=Object.assign(fresh(),d); S.workouts.forEach(w=>delete w._s); S._del=old.filter(id=>!S.workouts.some(w=>w.id===id)); save(); render(); toast('📥 ¡Datos restaurados!'); }catch(e){ toast('⚠️ Ese archivo no es una copia de GlowFit'); } }; i.click(); },
+  export:()=>{ const b=new Blob([JSON.stringify(S,null,1)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='girlgym-copia-'+new Date().toISOString().slice(0,10)+'.json'; a.click(); toast('💾 Copia descargada (las fotos se quedan en el móvil)'); },
+  import:()=>{ const i=document.createElement('input'); i.type='file'; i.accept='.json,application/json'; i.onchange=async()=>{ try{ const d=JSON.parse(await i.files[0].text()); if(!d.v||!d.profile) throw 0; if(!confirm('Esto reemplaza tus datos actuales. ¿Seguir?')) return; const old=S.workouts.filter(w=>w._s).map(w=>w.id); S=Object.assign(fresh(),d); S.workouts.forEach(w=>delete w._s); S._del=old.filter(id=>!S.workouts.some(w=>w.id===id)); save(); render(); toast('📥 ¡Datos restaurados!'); }catch(e){ toast('⚠️ Ese archivo no es una copia de GirlGym'); } }; i.click(); },
   reset:()=>{ if(confirm('¿Seguro? Se borran tus entrenos y tu progreso (las fotos se quedan).') && confirm('¿Segurísima? 🥺')){ const ids=S.workouts.filter(w=>w._s).map(w=>w.id); S=fresh(); S._del=ids; ui.onb=0; if(USER&&USER.user_metadata&&USER.user_metadata.name){ ui.onbData.name=USER.user_metadata.name; ui.onb=1; } save(); render(); } },
   // workout
   adj:el=>{ const s=S.active.entries[+el.dataset.e].sets[+el.dataset.s], f=el.dataset.f; s[f]=Math.max(0, +(num(s[f])+ +el.dataset.v).toFixed(2)); save(); render(); },
@@ -1102,6 +1227,21 @@ document.addEventListener('input', e=>{
 });
 document.addEventListener('submit', async e=>{
   if(e.target.id==='authForm'){ e.preventDefault(); submitAuth(e.target); }
+  if(e.target.id==='friendForm'){ e.preventDefault(); const code=String(new FormData(e.target).get('c')||'').trim().toUpperCase();
+    if(!/^[A-Z0-9]{6}$/.test(code)){ toast('El código tiene 6 letras o números'); return; }
+    const r=await SB.rpc('find_friend_code',{p_code:code}); const f=r.data&&r.data[0];
+    if(!f){ toast('🙈 No encuentro ese código'); return; }
+    if(ui.soc.friends.some(x=>x.id===f.user_id)){ toast(`Ya estás conectada con ${f.name} 💖`); closeModal(); return; }
+    const ins=await SB.from('friendships').insert({id:uuid(), requester:USER.id, addressee:f.user_id, status:'pending'});
+    if(ins.error){ toast('⚠️ No se pudo enviar'); return; }
+    closeModal(); toast(`💌 Solicitud enviada a ${f.name}`); loadSocial(); }
+  if(e.target.id==='cheerForm'){ e.preventDefault(); sendCheer(e.target.dataset.to, new FormData(e.target).get('t')); }
+  if(e.target.id==='answerForm'){ e.preventDefault(); const t=String(new FormData(e.target).get('t')||'').trim(); if(!t) return;
+    await postActivity('answer', t.slice(0,300), {q:weekIdx()%QUESTIONS.length}); addXP(10); save(); toast('💬 ¡Respuesta compartida! +10 XP'); loadSocial(); }
+  if(e.target.dataset && e.target.dataset.reply){ e.preventDefault(); const id=e.target.dataset.reply, t=String(new FormData(e.target).get('t')||'').trim(); if(!t) return;
+    const row={id:uuid(), post_id:id, user_id:USER.id, text:t.slice(0,300), created_at:new Date().toISOString()};
+    const r=await SB.from('post_replies').insert({id:row.id, post_id:id, user_id:USER.id, text:row.text}); if(r.error){ toast('⚠️ No se pudo enviar'); return; }
+    ui.soc.replies.push(row); render(); }
   if(e.target.id==='coachForm'){ e.preventDefault(); const i=$('#coachIn'); const v=i.value; i.value=''; coachSend(v); }
   if(e.target.id==='pwForm'){ e.preventDefault(); const pw=String(new FormData(e.target).get('password')||'');
     if(pw.length<8){ toast('Mínimo 8 caracteres 🔑'); return; }
@@ -1130,7 +1270,7 @@ function boot(){
   render();
 }
 window.addEventListener('online', ()=>schedulePush());
-document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') push(); });
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') push(); else if(USER && S && S.profile && Date.now()-(ui.socAt||0)>60000) loadSocial(); });
 boot();
 if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>

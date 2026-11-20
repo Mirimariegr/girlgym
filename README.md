@@ -1,12 +1,12 @@
-# GlowFit 💖
+# GirlGym 💖
 
-App de entreno gamificada para conseguir tu primera dominada.
+App de entreno gamificada para conseguir tu primera dominada, con tu ciclo, un coach con IA y tus amigas.
 Funciona en el móvil como una app (se puede añadir a la pantalla de inicio).
 
 ## Activar las cuentas y la nube (Supabase) — 10 minutos
 
 1. **Crea el proyecto**: entra en [supabase.com](https://supabase.com) → *Start your project* → regístrate → *New project*.
-   Ponle de nombre `glowfit`, inventa una contraseña de base de datos (guárdala) y elige la región *Europe*.
+   Ponle de nombre `girlgym`, inventa una contraseña de base de datos (guárdala) y elige la región *Europe*.
 2. **Crea las tablas**: en el menú de la izquierda → *SQL Editor* → *New query* → pega todo el contenido de
    [`supabase/schema.sql`](supabase/schema.sql) → botón **Run**. Debe decir *Success*.
 3. **Dirección de la app** (para los emails de confirmar cuenta y recuperar contraseña):
@@ -44,3 +44,14 @@ El chat usa Claude (la IA de Anthropic). Tu clave de la IA se guarda en Supabase
 
 **Gasto controlado**: máximo 30 preguntas por persona y día (se cambia en `DAILY_LIMIT`).
 Cada pregunta cuesta aproximadamente 1-2 céntimos de dólar.
+
+## Amigas 👯‍♀️
+
+Ya viene incluido en `supabase/schema.sql` (si lo ejecutaste antes, vuelve a ejecutarlo: es seguro repetirlo).
+
+- Cada persona tiene un **código de amiga** de 6 caracteres. Se comparte con "Invitar amiga".
+- Al aceptar una solicitud, las dos veis los entrenos, insignias y pasos hacia la dominada de la otra.
+- **Pregunta de la semana**: todas la responden y podéis reaccionar (💖🔥👏) y contestaros.
+- **Mensajes de ánimo** 💌: aparecen en la pantalla Hoy de tu amiga.
+- Privacidad: solo las amigas aceptadas ven tu actividad. El ciclo y las fotos **nunca** se comparten.
+  Se puede dejar de compartir la actividad en Amigas → "Compartir mi actividad".

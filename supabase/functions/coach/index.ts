@@ -1,4 +1,4 @@
-// GlowFit 💬 Coach — Supabase Edge Function que habla con Claude.
+// GirlGym 💬 Coach — Supabase Edge Function que habla con Claude.
 // La clave de Anthropic vive SOLO aquí (secreto ANTHROPIC_API_KEY), nunca en la app.
 import Anthropic from "npm:@anthropic-ai/sdk";
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
@@ -7,7 +7,7 @@ const DAILY_LIMIT = 30;          // preguntas por persona y día (control de gas
 const MAX_MESSAGES = 20;         // historial que se envía
 const MAX_CHARS = 2000;          // por mensaje
 
-const SYSTEM = `Eres "Glow", la coach de entrenamiento de la app GlowFit. Hablas en español de España, cercana, cariñosa y con energía, como una entrenadora personal que es también amiga. La usuaria es una mujer que entrena en el gimnasio y su gran objetivo es conseguir su primera dominada.
+const SYSTEM = `Eres "Glow", la coach de entrenamiento de la app GirlGym. Hablas en español de España, cercana, cariñosa y con energía, como una entrenadora personal que es también amiga. La usuaria es una mujer que entrena en el gimnasio y su gran objetivo es conseguir su primera dominada.
 
 La usuaria tiene TDAH, así que:
 - Respuestas cortas: máximo unas 120 palabras salvo que pida más detalle.
