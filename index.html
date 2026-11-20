@@ -228,10 +228,18 @@ const DEFAULT_EX = [
 ];
 
 const TEMPLATES = [
-  {title:'Espalda & Dominada 🎀', items:[['hang',3,20],['scap',3,8],['aus',3,8],['neg',3,3],['lat',3,10],['curl',2,12]]},
-  {title:'Pierna & Core 🍑',      items:[['squat',3,10],['hip',3,10],['rdl',3,10],['lunge',2,10],['plank',3,30]]},
-  {title:'Full body ✨',          items:[['hang',2,30],['band',3,5],['row',3,10],['press',3,10],['push',3,8],['hollow',3,20]]},
+  {id:'back',  title:'Espalda & Dominada 🎀', items:[['hang',3,20],['scap',3,8],['aus',3,8],['neg',3,3],['lat',3,10],['curl',2,12]]},
+  {id:'legs',  title:'Pierna & Core 🍑',      items:[['squat',3,10],['hip',3,10],['rdl',3,10],['lunge',2,10],['plank',3,30]]},
+  {id:'full',  title:'Full body ✨',          items:[['hang',2,30],['band',3,5],['row',3,10],['press',3,10],['push',3,8],['hollow',3,20]]},
+  {id:'upper', title:'Tren superior 💪',      items:[['band',3,5],['dbrow',3,10],['press',3,10],['push',3,8],['curl',3,12],['hang',2,30]]},
+  {id:'glute', title:'Glúteo & Core 🌸',      items:[['hip',4,10],['rdl',3,10],['lunge',3,10],['plank',3,30],['hollow',3,20]]},
+  {id:'tech',  title:'Técnica de dominada 👑', items:[['hang',3,30],['scap',3,10],['neg',3,3],['band',3,5]]},
+  {id:'mob',   title:'Activo suave 🧘‍♀️',      items:[['hang',2,20],['aus',2,8],['plank',2,30],['hollow',2,20]]},
 ];
+// Reparto semanal según cuántos días entrenas (en orden de lunes a domingo)
+const SPLITS = {1:['full'], 2:['back','full'], 3:['back','legs','full'], 4:['back','legs','upper','full'],
+  5:['back','legs','upper','glute','full'], 6:['back','legs','upper','glute','tech','full'], 7:['back','legs','upper','glute','tech','full','mob']};
+const tplById = id => TEMPLATES.find(t=>t.id===id);
 
 const ROAD = [
   {id:'r1', e:'🌱', t:'Colgarte 20 segundos',               ex:'hang', v:20, tip:'Agárrate a la barra y cuelga con los brazos estirados. ¡Respira!'},
@@ -389,7 +397,7 @@ async function onLogin(user){
   USER = user; S = load(); ui.booting = true; render();
   try{ await pull(); setSync('ok'); }
   catch(e){ console.warn('pull', e); setSync('error'); toast('📴 Sin conexión: usando los datos de este móvil'); }
-  ui.booting = false; ui.tab = 'hoy';
+  ui.booting = false; ui.tab = 'hoy'; migratePlan();
   if(!S.profile){ ui.onb = 0; const n = user.user_metadata && user.user_metadata.name; if(n){ ui.onbData.name = n; ui.onb = 1; } }
   writeLocal(); schedulePush();
   await refreshPhotoStats(); if(S.profile) sweep(true);
@@ -402,10 +410,12 @@ function onLogout(){
   ui.auth = {mode:'login', email:ui.auth.email, name:'', busy:false, err:'', msg:''};
   closeModal(); render();
 }
+function migratePlan(){ if(!S||!S.profile) return; const ks=Object.keys(S.plan||{}); if(ks.length && ks.every(k=>S.plan[k].tpl)) return;
+  S.plan=buildPlan(S.profile.days, S.plan); writeLocal(); }
 function enterLocal(){
   USER = null; S = load();
   if(!S.profile){ const L=legacy(); if(L){ S=Object.assign(fresh(), L.s); } }
-  ui.booting = false; writeLocal();
+  ui.booting = false; migratePlan(); writeLocal();
   refreshPhotoStats().then(()=>{ if(S.profile) sweep(true); render(); });
   render();
 }
@@ -849,9 +859,13 @@ function viewOnb(){
   ];
   return `<div class="wrap onb">${steps[ui.onb]}<p class="tiny center mt2">${ui.onb+1} / 3</p></div>`;
 }
-function buildPlan(days){
-  const plan={}; const sorted=DAYS.filter(x=>days.includes(x));
-  sorted.forEach((d,i)=>{ const t=TEMPLATES[i%TEMPLATES.length]; plan[d]={title:t.title, items:t.items.map(([exId,sets,reps])=>({exId,sets,reps}))}; });
+function buildPlan(days, old={}){
+  // Reparte los entrenos según el nº de días. Si ya existía un entreno de ese tipo
+  // (aunque lo hayas personalizado), se reutiliza tal cual en su nuevo día.
+  const sorted=DAYS.filter(x=>days.includes(x)), split=SPLITS[sorted.length]||[], pool={};
+  for(const k of Object.keys(old).sort((x,y)=>(x.startsWith('s_')?1:0)-(y.startsWith('s_')?1:0))){ const pl=old[k]; if(!pl) continue; const t=pl.tpl||(TEMPLATES.find(x=>x.title===pl.title)||{}).id; if(t && !pool[t]) pool[t]={...pl, tpl:t}; }
+  const plan={};
+  sorted.forEach((d,i)=>{ const id=split[i], t=tplById(id); plan[d]=pool[id]||{tpl:id, title:t.title, items:t.items.map(([exId,sets,reps])=>({exId,sets,reps}))}; });
   return plan;
 }
 
@@ -906,7 +920,7 @@ function viewPlan(){
         <div style="display:flex;flex-direction:column;gap:4px"><button class="x" data-a="planUp" data-d="${d}" data-i="${i}">↑</button><button class="x" data-a="planDel" data-d="${d}" data-i="${i}">✕</button></div></div>`; }).join('')+`
       <button class="btn ghost mt" data-a="addEx" data-v="${d}">＋ Añadir ejercicio</button>`}
     </div>`;}).join('');
-  return `<div class="wrap">${header('Mi plan 🗓️','Toca un día para activarlo o quitarlo')}
+  return `<div class="wrap">${header('Mi plan 🗓️','Toca un día para activarlo o quitarlo')+`<p class="tiny" style="margin:-6px 2px 10px">Con ${p.days.length} día${p.days.length>1?'s':''} tu semana es: <b>${(SPLITS[p.days.length]||[]).map(x=>tplById(x).title).join(' · ')}</b></p>`}
     <div class="card"><div class="days">${DAYS.map(x=>`<button class="day ${p.days.includes(x)?'on':''}" data-a="toggleDay" data-v="${x}">${DL[x]}</button>`).join('')}</div></div>
     ${daysHtml || '<div class="card soft center muted">Elige al menos un día arriba ☝️</div>'}
     <div class="card"><h3>📚 Mis ejercicios</h3><p class="muted">Añade los de tu tabla del gimnasio.</p>
@@ -1250,7 +1264,9 @@ const A = {
       ${S.road[r.id]?`<p class="center mt2 name">✅ Conseguido el ${fmtD(S.road[r.id])}</p><button class="link mt" style="display:block;margin:12px auto 0;color:var(--ink-3)" data-a="roadUndo" data-v="${r.id}">Desmarcar</button>`:`<button class="btn mt2" data-a="roadMark" data-v="${r.id}">¡Ya lo he conseguido! 🎉</button>`}`); },
   roadMark:el=>{ S.road[el.dataset.v]=Date.now(); addXP(150); postActivity('road','',{id:el.dataset.v}); closeModal(); sweep(true); render(); confetti(); toast('+150 XP ✨'); if(el.dataset.v==='r8'){ setTimeout(()=>confetti(80),600); } },
   roadUndo:el=>{ delete S.road[el.dataset.v]; save(); closeModal(); render(); },
-  toggleDay:el=>{ const d=+el.dataset.v, p=S.profile; if(p.days.includes(d)) p.days=p.days.filter(x=>x!==d); else { p.days.push(d); if(!S.plan[d]){ const t=TEMPLATES[p.days.length%TEMPLATES.length]; S.plan[d]={title:t.title,items:t.items.map(([exId,sets,reps])=>({exId,sets,reps}))}; } } save(); render(); },
+  toggleDay:el=>{ const d=+el.dataset.v, p=S.profile; if(p.days.includes(d)){ if(p.days.length===1){ toast('Necesitas al menos un día 💖'); return; } p.days=p.days.filter(x=>x!==d); } else p.days.push(d);
+    S.planStash=S.planStash||{}; for(const k in S.plan){ const t=S.plan[k].tpl; if(t) S.planStash[t]=S.plan[k]; }
+    S.plan=buildPlan(p.days, {...Object.fromEntries(Object.entries(S.planStash).map(([t,v])=>['s_'+t,v])), ...S.plan}); save(); render(); const n=p.days.length; toast(`🗓️ ${n} día${n>1?'s':''}: ${SPLITS[n].map(x=>tplById(x).title).join(' · ')}`); },
   renameDay:el=>{ const d=el.dataset.v, n=prompt('Nombre del entreno:', S.plan[d].title); if(n&&n.trim()){ S.plan[d].title=n.trim(); save(); render(); } },
   planAdj:el=>{ const it=S.plan[el.dataset.d].items[+el.dataset.i], f=el.dataset.f; it[f]=Math.max(1, it[f]+ +el.dataset.v); save(); render(); },
   planDel:el=>{ S.plan[el.dataset.d].items.splice(+el.dataset.i,1); save(); render(); },
