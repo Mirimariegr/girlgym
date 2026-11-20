@@ -83,3 +83,14 @@ select
   xp
 from public.workouts
 order by started_at desc;
+
+-- ---------- Coach 💬: contador de preguntas (límite diario de gasto) ----------
+create table if not exists public.coach_usage (
+  id         bigserial primary key,
+  user_id    uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+create index if not exists coach_usage_user_time on public.coach_usage (user_id, created_at);
+alter table public.coach_usage enable row level security;
+drop policy if exists "own coach usage" on public.coach_usage;
+create policy "own coach usage" on public.coach_usage for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);

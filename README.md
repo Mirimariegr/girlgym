@@ -29,3 +29,18 @@ Listo: al abrir la app verás **Entrar / Crear cuenta**.
 
 Cada persona solo puede ver sus propios datos (Row Level Security).
 La app también guarda una copia en el móvil, así que funciona sin internet y sincroniza al volver la conexión.
+
+## Activar el Coach 💬 (chat con IA)
+
+El chat usa Claude (la IA de Anthropic). Tu clave de la IA se guarda en Supabase y **nunca** está dentro de la app.
+
+1. **Clave de la IA**: entra en [console.anthropic.com](https://console.anthropic.com) → crea una cuenta → añade algo de saldo
+   (con 5 € tienes para muchísimas preguntas) → *API Keys* → *Create Key* y cópiala.
+2. **Guárdala en Supabase**: *Edge Functions* → *Secrets* → *Add new secret*:
+   nombre `ANTHROPIC_API_KEY`, valor = tu clave.
+3. **Crea la función**: *Edge Functions* → *Deploy a new function* → *Via Editor* → nombre **`coach`** →
+   pega el contenido de [`supabase/functions/coach/index.ts`](supabase/functions/coach/index.ts) → *Deploy*.
+4. Asegúrate de haber ejecutado el `schema.sql` actualizado (crea la tabla `coach_usage`).
+
+**Gasto controlado**: máximo 30 preguntas por persona y día (se cambia en `DAILY_LIMIT`).
+Cada pregunta cuesta aproximadamente 1-2 céntimos de dólar.

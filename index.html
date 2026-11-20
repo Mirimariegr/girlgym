@@ -176,6 +176,15 @@ select.sel{width:100%;padding:11px 12px;border-radius:14px;border:1.5px solid va
 .onb{min-height:100vh;display:flex;flex-direction:column;justify-content:center}
 .hidden{display:none!important}
 .pw{position:relative}.pw .field{padding-right:52px}.pw .eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:20px;padding:8px}
+.chat{display:flex;flex-direction:column;gap:10px}
+.msg{max-width:86%;padding:11px 14px;border-radius:20px;line-height:1.45;font-size:15px;word-wrap:break-word}
+.msg.u{align-self:flex-end;background:var(--pink);color:#fff;border-bottom-right-radius:6px}
+.msg.a{align-self:flex-start;background:#fff;box-shadow:var(--shadow);border-bottom-left-radius:6px}
+.msg.a ul{margin:6px 0 2px 18px}.msg.a li{margin:2px 0}
+.chatbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom));width:calc(100% - 28px);max-width:490px;display:flex;gap:8px;z-index:19}
+.chatbar .field{background:#fff;box-shadow:var(--shadow)}
+.typing span{display:inline-block;animation:pulse 1s infinite}.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+nav.bottom button{font-size:11px}
 .hint.err{background:#FFE8EE;color:#B4234F}
 .btn:disabled{opacity:.6}
 details summary{cursor:pointer;list-style:none}
@@ -480,14 +489,16 @@ function render(){
   if(ui.booting){ app.innerHTML=`<div class="wrap onb center"><span class="big-emo" style="animation:pulse 1.2s infinite">💖</span><p class="muted">Cargando…</p></div>`; return; }
   if(!S){ app.innerHTML=viewAuth(); return; }
   if(!S.profile){ app.innerHTML=viewOnb(); return; }
+  if(S.active && ui.woCoach){ app.innerHTML=`<div class="wrap" style="padding-bottom:0;position:sticky;top:0;z-index:25;padding-top:calc(10px + env(safe-area-inset-top))"><button class="btn sm lila" data-a="backToWo">← Volver al entreno (${fmtT(activeMs(S.active))})</button></div>`+viewCoach()+'<style>.chatbar{bottom:calc(16px + env(safe-area-inset-bottom))}</style>'; const c=$('#chatEnd'); if(c) c.scrollIntoView({block:'end'}); return; }
   if(S.active){ app.innerHTML=viewWorkout(); tick(); return; }
-  const v={hoy:viewHoy,plan:viewPlan,logros:viewLogros,datos:viewDatos}[ui.tab]();
+  const v={hoy:viewHoy,plan:viewPlan,coach:viewCoach,logros:viewLogros,datos:viewDatos}[ui.tab]();
   app.innerHTML = v + nav();
+  if(ui.tab==='coach'){ const c=$('#chatEnd'); if(c) c.scrollIntoView({block:'end'}); }
   if(ui.tab==='datos') loadPhotos();
 }
 function nav(){
   const b=(id,ic,l)=>`<button class="${ui.tab===id?'on':''}" data-a="tab" data-v="${id}"><span class="ic">${ic}</span>${l}</button>`;
-  return `<nav class="bottom">${b('hoy','🏠','Hoy')}${b('plan','🗓️','Mi plan')}${b('logros','🏆','Logros')}${b('datos','📈','Progreso')}</nav>`;
+  return `<nav class="bottom">${b('hoy','🏠','Hoy')}${b('plan','🗓️','Plan')}${b('coach','💬','Coach')}${b('logros','🏆','Logros')}${b('datos','📈','Progreso')}</nav>`;
 }
 function header(title, sub){ const L=level(S.xp); return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="chip-xp">${USER?`<span id="syncDot" title="Nube">${syncIcon()}</span> `:''}✨ ${S.xp} XP</div></div>`; }
 
@@ -505,6 +516,75 @@ function ciRender(){
     <p class="tiny mt2">¿ALGO MÁS? (OPCIONAL)</p>
     <div class="row mt" style="flex-wrap:wrap;gap:8px">${SYMPTOMS.map(x=>`<button class="pill ${c.sym.includes(x)?'pk':''}" style="padding:8px 12px;font-size:13px${c.sym.includes(x)?';outline:2px solid var(--pink)':''}" data-a="ciSym" data-v="${x}">${x}</button>`).join('')}</div>
     <button class="link mt2" style="display:block;margin:18px auto 0;color:var(--ink-3)" data-a="ciGo" data-v="skip">Saltar y empezar</button>`);
+}
+
+/* ---------- Coach 💬 (IA vía Supabase Edge Function "coach") ---------- */
+const COACH_QUICK = ['¿Cómo se hace una negativa?','La máquina está ocupada, ¿qué hago en su lugar?','No consigo colgarme mucho rato, ¿qué hago?','¿Cuánto descanso entre series?'];
+function mdLite(t){
+  const lines=esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').split('\n'); let out='', inList=false;
+  for(const l of lines){ const m=l.match(/^\s*(?:[-•*]|\d+[.)])\s+(.*)/);
+    if(m){ if(!inList){ out+='<ul>'; inList=true; } out+='<li>'+m[1]+'</li>'; }
+    else { if(inList){ out+='</ul>'; inList=false; } out+= l.trim()? l+'<br>' : '<br>'; } }
+  if(inList) out+='</ul>'; return out.replace(/(<br>)+$/,'');
+}
+function coachContext(){
+  const d=new Date().getDay(), pl=S.plan[d], next=ROAD.find(r=>!S.road[r.id]), inf=cycleInfo(), last=S.workouts[S.workouts.length-1];
+  const item=it=>{ const e=ex(it.exId); return `${e.name} (${it.sets}×${it.reps}${e.kind==='time'?' s':''})`; };
+  const L=[`Nombre: ${S.profile.name}`, `Días de entreno: ${DAYS.filter(x=>S.profile.days.includes(x)).map(x=>DN[x]).join(', ')}`,
+    pl&&pl.items.length?`Entreno de hoy (${pl.title}): ${pl.items.map(item).join('; ')}`:'Hoy no tiene entreno planificado',
+    `Ejercicios en su biblioteca: ${S.exercises.slice(0,40).map(e=>e.name).join(', ')}`,
+    `Camino a la dominada: ${ROAD.filter(r=>S.road[r.id]).length}/${ROAD.length} pasos. ${next?'Siguiente paso: '+next.t:'¡Ya hace dominadas!'}`,
+    `Récords: colgarse ${bestOf('hang')} s, negativas ${bestOf('neg')} reps, dominadas ${bestOf('pull')}`,
+    `Entrenos registrados: ${S.workouts.length}`];
+  if(inf) L.push(`Ciclo: día ${inf.day}, ${PHASES[inf.ph].n}`);
+  if(last&&last.meta&&last.meta.energy) L.push(`Energía en el último entreno: ${({low:'baja',ok:'normal',high:'alta'})[last.meta.energy]}${last.meta.symptoms&&last.meta.symptoms.length?' ('+last.meta.symptoms.join(', ')+')':''}`);
+  if(S.active) L.push(`AHORA MISMO está entrenando: ${S.active.entries.map(e=>ex(e.exId).name).join(', ')}`);
+  return L.join('\n');
+}
+function viewCoach(){
+  const msgs=S.chat||[], ready=!!(SB&&USER);
+  return `<div class="wrap" style="padding-bottom:90px">${header('Coach 💬','Pregúntame lo que quieras de tus ejercicios')}
+    ${!ready?`<div class="card soft center"><span class="big-emo">🔌</span><h3>El coach necesita la nube</h3><p class="muted">Cuando conectes tu cuenta (Supabase) y la clave de la IA, podrás preguntarme dudas, cómo sustituir ejercicios o qué hacer si algo no te sale.</p></div>`:''}
+    <div class="chat">
+      <div class="msg a">¡Hola${S.profile?', '+esc(S.profile.name):''}! Soy <b>Glow</b> 💖 Pregúntame cómo se hace un ejercicio, por cuál cambiarlo si la máquina está ocupada o qué hacer si algo no te sale todavía.</div>
+      ${msgs.map(m=>`<div class="msg ${m.role==='user'?'u':'a'}">${m.role==='user'?esc(m.content):mdLite(m.content)}</div>`).join('')}
+      ${ui.coachBusy?'<div class="msg a typing"><span>●</span> <span>●</span> <span>●</span></div>':''}
+      ${!msgs.length&&ready?`<div class="row" style="flex-wrap:wrap;gap:8px">${COACH_QUICK.map(q=>`<button class="pill" style="padding:9px 12px;font-size:13px;text-align:left" data-a="coachAsk" data-v="${esc(q)}">${esc(q)}</button>`).join('')}</div>`:''}
+      ${msgs.length?`<button class="link" style="align-self:center;color:var(--ink-3);margin-top:6px" data-a="coachClear">Empezar conversación nueva</button>`:''}
+      <div id="chatEnd"></div>
+    </div>
+    <p class="tiny center mt">Glow es una IA: puede equivocarse. Si algo te duele, para y consulta a un profesional.</p></div>
+    ${ready?`<form class="chatbar" id="coachForm"><input class="field" id="coachIn" placeholder="Escribe tu duda…" autocomplete="off" maxlength="1000" ${ui.coachBusy?'disabled':''}><button class="btn sm" type="submit" ${ui.coachBusy?'disabled':''} aria-label="Enviar">➤</button></form>`:''}`;
+}
+async function coachSend(text){
+  text=String(text||'').trim(); if(!text || ui.coachBusy) return;
+  if(!SB||!USER){ toast('Conecta tu cuenta para usar el coach 💬'); return; }
+  S.chat=(S.chat||[]); S.chat.push({role:'user',content:text,t:Date.now()}); S.chat=S.chat.slice(-40);
+  ui.coachBusy=true; save(); render();
+  let reply;
+  try{
+    const {data,error}=await SB.functions.invoke('coach',{body:{messages:S.chat.slice(-20).map(m=>({role:m.role,content:m.content})), context:coachContext()}});
+    if(error){ let code=''; try{ code=(await error.context.json()).error; }catch(e){} throw new Error(code||error.message); }
+    reply=data&&data.reply;
+  }catch(e){
+    const m=String(e.message||e);
+    reply = /daily_limit/.test(m)?'Por hoy ya hemos hablado un montón 😅 Mañana sigo aquí para ti 💖'
+      : /busy/.test(m)?'Ahora mismo estoy saturada. Prueba en un minutito ⏳'
+      : /fetch|network|Failed/i.test(m)?'No tengo conexión 📶 Vuelve a probar cuando tengas internet.'
+      : 'Ups, algo ha fallado y no te he podido responder 🙈 Prueba otra vez en un rato.';
+    S.chat.pop(); ui.coachBusy=false; render(); toast(reply); const i=$('#coachIn'); if(i) i.value=text; return;
+  }
+  S.chat.push({role:'assistant',content:reply||'…',t:Date.now()}); ui.coachBusy=false; save(); render();
+}
+function coachHelp(ei){
+  const e=ex(S.active.entries[ei].exId);
+  const qs=[['📖','¿Cómo se hace?',`¿Cómo se hace bien "${e.name}"? Explícamelo paso a paso.`],
+    ['🔁','Está ocupado / no tengo el material',`Estoy entrenando y no puedo hacer "${e.name}" (está ocupado o no tengo el material). ¿Por qué lo sustituyo?`],
+    ['🌱','No me sale / me cuesta mucho',`No me sale "${e.name}" o me cuesta muchísimo. ¿Qué versión más fácil hago?`],
+    ['⚠️','Siento una molestia',`Al hacer "${e.name}" noto una molestia. ¿Qué hago?`]];
+  modal(`<div class="row"><div class="emo">${e.emoji}</div><h2 style="margin:0">${esc(e.name)}</h2></div><p class="muted mt">¿En qué te ayudo?</p>
+    ${qs.map(q=>`<button class="opt" data-a="coachFromWo" data-v="${esc(q[2])}"><span style="font-size:26px">${q[0]}</span><span class="name">${q[1]}</span></button>`).join('')}
+    <p class="tiny mt2">Tu entreno sigue en marcha. Vuelve con la pestaña de abajo o el botón "Volver al entreno".</p>`);
 }
 
 /* ---------- "Hoy no me apetece" ---------- */
@@ -783,7 +863,7 @@ function viewWorkout(){
     <button class="btn ghost mt" data-a="finish">Terminar aquí ✓</button></div></div>`:''}
   <div class="wrap">
   ${A.entries.map((en,ei)=>{ const e=ex(en.exId), k=e.kind, t2=k!=='weight';
-    return `<div class="card"><div class="row"><div class="emo">${e.emoji}</div><div class="grow"><div class="name">${esc(e.name)}</div><div class="tiny">Objetivo: ${en.sets.length} × ${en.target}${k==='time'?' s':' reps'}</div></div><button class="x" data-a="woDelEx" data-e="${ei}">✕</button></div>
+    return `<div class="card"><div class="row"><div class="emo">${e.emoji}</div><div class="grow"><div class="name">${esc(e.name)}</div><div class="tiny">Objetivo: ${en.sets.length} × ${en.target}${k==='time'?' s':' reps'}</div></div><button class="x" data-a="coachHelp" data-e="${ei}" aria-label="Ayuda con este ejercicio" style="margin-right:6px;background:var(--lila-l)">💬</button><button class="x" data-a="woDelEx" data-e="${ei}">✕</button></div>
       ${en.hint?`<div class="hint ${en.up?'up':''}">${en.hint}</div>`:''}
       <div class="colh ${t2?'t2':''}"><span>#</span>${k==='weight'?'<span>kg</span><span>reps</span>':k==='time'?'<span>segundos</span>':'<span>reps</span>'}<span>✓</span></div>
       ${en.sets.map((s,si)=>`<div class="set ${t2?'t2':''} ${s.done?'done':''}"><div class="n">${si+1}</div>
@@ -938,6 +1018,11 @@ const A = {
   ciEnergy:el=>{ ui.ci.energy=el.dataset.v; if(el.dataset.v==='low' || ui.ci.sym.length>=2){ ui.ci.step=2; ciRender(); } else A.ciGo({dataset:{v:'normal'}}); },
   ciGo:el=>{ const c=ui.ci; startWorkout(c.day, {...c.o, energy:c.energy||null, symptoms:c.sym, soft:c.o.soft||el.dataset.v==='soft'}); },
   meh:()=>mehModal(),
+  coachAsk:el=>coachSend(el.dataset.v),
+  coachClear:()=>{ if(!confirm('¿Empezar una conversación nueva?')) return; S.chat=[]; save(); render(); },
+  coachHelp:el=>{ if(!SB||!USER){ toast('El coach necesita tu cuenta conectada 💬'); return; } coachHelp(+el.dataset.e); },
+  coachFromWo:el=>{ closeModal(); ui.woCoach=true; ui.tab='coach'; render(); coachSend(el.dataset.v); },
+  backToWo:()=>{ ui.woCoach=false; render(); scrollTo(0,0); },
   mehGo:el=>{ const v=el.dataset.v, d=new Date().getDay();
     if(v==='rest'){ (S.rest=S.rest||{})[dayKey(Date.now())]=true; addXP(5); save(); closeModal(); render(); toast('💤 Descanso apuntado. ¡Bien hecho por escucharte! +5 XP'); return; }
     if(v==='mini') startWorkout(d, {mini:true, energy:'low'});
@@ -1017,6 +1102,7 @@ document.addEventListener('input', e=>{
 });
 document.addEventListener('submit', async e=>{
   if(e.target.id==='authForm'){ e.preventDefault(); submitAuth(e.target); }
+  if(e.target.id==='coachForm'){ e.preventDefault(); const i=$('#coachIn'); const v=i.value; i.value=''; coachSend(v); }
   if(e.target.id==='pwForm'){ e.preventDefault(); const pw=String(new FormData(e.target).get('password')||'');
     if(pw.length<8){ toast('Mínimo 8 caracteres 🔑'); return; }
     const {error}=await SB.auth.updateUser({password:pw}); if(error){ toast(authErr(error)); return; }
