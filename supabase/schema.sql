@@ -22,9 +22,11 @@ create table if not exists public.workouts (
   entries    jsonb not null default '[]'::jsonb,  -- [{exId, target, sets:[{w, r, t, done}]}]
   prs        jsonb not null default '[]'::jsonb,
   xp         int not null default 0,
+  paused_ms  bigint not null default 0,  -- tiempo en pausa (ms)
   created_at timestamptz not null default now(),
   primary key (user_id, id)
 );
+alter table public.workouts add column if not exists paused_ms bigint not null default 0;
 create index if not exists workouts_user_started on public.workouts (user_id, started_at);
 
 -- Fotos de antes / después (el archivo va al bucket privado "photos")
@@ -70,7 +72,8 @@ select
   to_char(started_at at time zone 'Europe/Madrid', 'DD/MM/YYYY') as dia,
   to_char(started_at at time zone 'Europe/Madrid', 'HH24:MI')    as hora_inicio,
   to_char(ended_at   at time zone 'Europe/Madrid', 'HH24:MI')    as hora_fin,
-  round(extract(epoch from ended_at - started_at) / 60)          as minutos,
+  round((extract(epoch from ended_at - started_at) * 1000 - paused_ms) / 60000) as minutos,
+  round(paused_ms / 60000.0)                                     as minutos_pausa,
   title as entreno,
   xp
 from public.workouts

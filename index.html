@@ -245,7 +245,7 @@ const CHALLENGES = [
   {id:'sets',   e:'✅', t:'Completa 35 series',                  goal:35,  m:ws=>ws.reduce((a,w)=>a+doneSets(w),0)},
   {id:'pr',     e:'🏆', t:'Bate un récord personal',             goal:1,   m:ws=>ws.reduce((a,w)=>a+(w.prs||[]).length,0)},
   {id:'plank',  e:'🧘‍♀️', t:'Acumula 3 min de plancha',         goal:180, m:ws=>sumEx(ws,'plank','t'), u:'s'},
-  {id:'long',   e:'⏱️', t:'Un entreno de 45 min o más',          goal:1,   m:ws=>ws.filter(w=>(w.end-w.start)>=45*60000).length},
+  {id:'long',   e:'⏱️', t:'Un entreno de 45 min o más',          goal:1,   m:ws=>ws.filter(w=>dur(w)>=45*60000).length},
   {id:'early',  e:'🌅', t:'Entrena antes de las 10:00',          goal:1,   m:ws=>ws.filter(w=>new Date(w.start).getHours()<10).length},
   {id:'photo',  e:'📸', t:'Sube una foto de progreso',           goal:1,   m:()=>photosThisWeek},
 ];
@@ -289,8 +289,8 @@ const CFG = window.GLOWFIT_CONFIG || {};
 const CLOUD = !!(CFG.supabaseUrl && CFG.supabaseAnonKey && window.supabase);
 const SB = CLOUD ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey) : null;
 const appUrl = () => location.origin + location.pathname;
-const toRow = (w,uid) => ({id:w.id, user_id:uid, started_at:new Date(w.start).toISOString(), ended_at:new Date(w.end).toISOString(), title:w.title, day:w.day, entries:w.entries, prs:w.prs||[], xp:w.xp||0});
-const fromRow = r => ({id:r.id, start:Date.parse(r.started_at), end:Date.parse(r.ended_at), title:r.title, day:r.day, entries:r.entries||[], prs:r.prs||[], xp:r.xp||0, _s:true});
+const toRow = (w,uid) => ({id:w.id, user_id:uid, started_at:new Date(w.start).toISOString(), ended_at:new Date(w.end).toISOString(), title:w.title, day:w.day, entries:w.entries, prs:w.prs||[], xp:w.xp||0, paused_ms:w.pausedMs||0});
+const fromRow = r => ({id:r.id, start:Date.parse(r.started_at), end:Date.parse(r.ended_at), title:r.title, day:r.day, entries:r.entries||[], prs:r.prs||[], xp:r.xp||0, pausedMs:r.paused_ms||0, _s:true});
 const syncIcon = () => ({ok:'☁️', pending:'⏳', error:'⚠️'})[ui.sync];
 const syncLabel = () => ({ok:'☁️ Todo guardado en la nube', pending:'⏳ Guardando en la nube…', error:'⚠️ Sin conexión: se guardará en cuanto vuelva internet'})[ui.sync];
 function setSync(v){ ui.sync=v; const d=$('#syncDot'); if(d) d.textContent=syncIcon(); const l=$('#syncLabel'); if(l) l.textContent=syncLabel(); }
@@ -375,6 +375,8 @@ const num = v => { const n = parseFloat(String(v).replace(',','.')); return isNa
 const fmtT = ms => { const s=Math.max(0,Math.floor(ms/1000)); const h=Math.floor(s/3600), m=Math.floor(s%3600/60), x=s%60; return (h?h+':':'')+String(m).padStart(h?2:1,'0')+':'+String(x).padStart(2,'0'); };
 const fmtMin = ms => { const m=Math.round(ms/60000); return m<60? m+' min' : Math.floor(m/60)+' h '+(m%60)+' min'; };
 const fmtD = t => new Date(t).toLocaleDateString('es-ES',{day:'numeric',month:'short'});
+const dur = w => Math.max(0, w.end - w.start - (w.pausedMs||0));   // tiempo real entrenando (sin pausas)
+const activeMs = A => Date.now() - A.start - (A.pausedMs||0) - (A.pausedAt ? Date.now()-A.pausedAt : 0);
 const fmtH = t => new Date(t).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
 const unit = k => k==='weight'?'kg':k==='time'?'s':'reps';
 function weekStart(d){ d=new Date(d); d.setHours(0,0,0,0); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.getTime(); }
@@ -407,7 +409,7 @@ function buzz(p){ try{ navigator.vibrate && navigator.vibrate(p); }catch(e){} }
 /* ---------- logros automáticos ---------- */
 function checkRoad(){ const got=[]; for(const r of ROAD){ if(S.road[r.id]) continue; if(bestOf(r.ex)>=r.v){ S.road[r.id]=Date.now(); addXP(150); got.push(r); } } return got; }
 function earnedBadges(){
-  const W=S.workouts, n=W.length, prs=W.reduce((a,w)=>a+(w.prs||[]).length,0), st=streak(), hrs=W.reduce((a,w)=>a+(w.end-w.start),0)/36e5, vol=W.reduce((a,w)=>a+volume(w),0), ch=Object.values(S.challenges).filter(c=>c.done).length, roadN=Object.keys(S.road).length;
+  const W=S.workouts, n=W.length, prs=W.reduce((a,w)=>a+(w.prs||[]).length,0), st=streak(), hrs=W.reduce((a,w)=>a+dur(w),0)/36e5, vol=W.reduce((a,w)=>a+volume(w),0), ch=Object.values(S.challenges).filter(c=>c.done).length, roadN=Object.keys(S.road).length;
   return {first:n>=1,w5:n>=5,w10:n>=10,w25:n>=25,w50:n>=50,pr1:prs>=1,pr10:prs>=10,streak3:st>=3,streak8:st>=8,hours5:hrs>=5,ton:vol>=10000,photo:photoCount>0,ch1:ch>=1,ch5:ch>=5,hang60:bestOf('hang')>=60,road4:roadN>=4,pullup:!!S.road.r8||bestOf('pull')>=1,pullup5:bestOf('pull')>=5};
 }
 function checkBadges(){ const e=earnedBadges(), got=[]; for(const b of BADGES){ if(e[b.id] && !S.badges[b.id]){ S.badges[b.id]=Date.now(); addXP(100); got.push(b);} } return got; }
@@ -590,7 +592,7 @@ function viewLogros(){
 
 /* ---------- PROGRESO / DATOS ---------- */
 function viewDatos(){
-  const W=S.workouts, tot=W.reduce((a,w)=>a+(w.end-w.start),0), vol=W.reduce((a,w)=>a+volume(w),0);
+  const W=S.workouts, tot=W.reduce((a,w)=>a+dur(w),0), vol=W.reduce((a,w)=>a+volume(w),0);
   const used=[...new Set(W.flatMap(w=>w.entries.filter(e=>e.sets.some(s=>s.done)).map(e=>e.exId)))];
   if(!ui.chartEx || !used.includes(ui.chartEx)) ui.chartEx=used.includes('hang')?'hang':used[0];
   return `<div class="wrap">${header('Progreso 📈')}
@@ -607,7 +609,7 @@ function viewDatos(){
   <div class="card"><div class="row between"><h3 style="margin:0">Antes y después 📸</h3><button class="btn sm" data-a="addPhoto">＋ Foto</button></div>
     <p class="muted mt">${USER?'Guardadas en tu nube privada: solo tú las ves 🔒':'Solo se guardan en este móvil 🔒'}</p><div id="photos" class="mt"></div></div>
   <div class="card"><h3>Historial</h3>${W.length?[...W].reverse().slice(0,20).map(w=>`
-    <details class="item" style="display:block"><summary class="row"><div class="emo">💪</div><div class="grow"><div class="name">${esc(w.title)}</div><div class="muted">${fmtD(w.start)} · ${fmtH(w.start)}–${fmtH(w.end)} · ${fmtMin(w.end-w.start)} · ${doneSets(w)} series ${(w.prs||[]).length?'· 🏆'+w.prs.length:''}</div></div></summary>
+    <details class="item" style="display:block"><summary class="row"><div class="emo">💪</div><div class="grow"><div class="name">${esc(w.title)}</div><div class="muted">${fmtD(w.start)} · ${fmtH(w.start)}–${fmtH(w.end)} · ${fmtMin(dur(w))}${w.pausedMs>=60000?` <span class="tiny">(+${fmtMin(w.pausedMs)} pausa)</span>`:''} · ${doneSets(w)} series ${(w.prs||[]).length?'· 🏆'+w.prs.length:''}</div></div></summary>
     <div style="padding:8px 0 4px 54px">${w.entries.filter(e=>e.sets.some(s=>s.done)).map(e=>{const k=ex(e.exId).kind;return `<div class="muted"><b>${esc(ex(e.exId).name)}</b>: ${e.sets.filter(s=>s.done).map(s=>k==='weight'?`${num(s.w)}kg×${num(s.r)}`:k==='time'?`${num(s.t)}s`:`${num(s.r)}`).join(' · ')}</div>`}).join('')}
     <button class="link mt" data-a="delW" data-v="${w.id}">Borrar este entreno</button></div></details>`).join(''):'<p class="muted">Aún no hay entrenos. ¡El primero es el más especial! 🎀</p>'}</div>
   </div>`;
@@ -639,8 +641,14 @@ function exChart(id){
 /* ---------- ENTRENO EN CURSO ---------- */
 function viewWorkout(){
   const A=S.active;
-  return `<div class="wohead"><div class="in"><div><div class="tiny" style="color:#fff">${esc(A.title)}</div><div class="clock" id="clock">${fmtT(Date.now()-A.start)}</div></div>
-    <button class="btn sm white" data-a="finish">Terminar ✓</button></div></div>
+  return `<div class="wohead"><div class="in"><div><div class="tiny" style="color:#fff">${esc(A.title)}</div><div class="clock" id="clock">${fmtT(activeMs(A))}</div></div>
+    <div class="row" style="gap:8px"><button class="btn sm white" data-a="pause" aria-label="Pausar entreno">⏸</button><button class="btn sm white" data-a="finish">Terminar ✓</button></div></div></div>
+  ${A.pausedAt?`<div class="ov" style="align-items:center;z-index:45"><div class="sheet center" style="border-radius:28px;margin:16px;max-width:420px">
+    <span class="big-emo">⏸️</span><h2>Entreno en pausa</h2>
+    <p class="muted">Llevas <b>${fmtT(activeMs(A))}</b> entrenando. Tómate tu tiempo 💖</p>
+    <p class="tiny mt">En pausa: <span id="pauseClock">${fmtT(Date.now()-A.pausedAt)}</span></p>
+    <button class="btn mt2" data-a="resume">▶ Seguir entrenando</button>
+    <button class="btn ghost mt" data-a="finish">Terminar aquí ✓</button></div></div>`:''}
   <div class="wrap">
   ${A.entries.map((en,ei)=>{ const e=ex(en.exId), k=e.kind, t2=k!=='weight';
     return `<div class="card"><div class="row"><div class="emo">${e.emoji}</div><div class="grow"><div class="name">${esc(e.name)}</div><div class="tiny">Objetivo: ${en.sets.length} × ${en.target}${k==='time'?' s':' reps'}</div></div><button class="x" data-a="woDelEx" data-e="${ei}">✕</button></div>
@@ -676,8 +684,9 @@ function startWorkout(day){
 }
 function finishWorkout(){
   const A=S.active; stopHold(); stopRest();
+  if(A.pausedAt){ A.pausedMs=(A.pausedMs||0)+(Date.now()-A.pausedAt); A.pausedAt=null; }
   const end=Date.now();
-  const w={id:uid(), start:A.start, end, title:A.title, day:A.day, entries:A.entries.map(e=>({exId:e.exId,target:e.target,sets:e.sets.map(s=>({w:s.w,r:s.r,t:s.t,done:s.done}))}))};
+  const w={id:uid(), start:A.start, end, pausedMs:A.pausedMs||0, title:A.title, day:A.day, entries:A.entries.map(e=>({exId:e.exId,target:e.target,sets:e.sets.map(s=>({w:s.w,r:s.r,t:s.t,done:s.done}))}))};
   const sets=doneSets(w);
   if(!sets){ if(!confirm('No has marcado ninguna serie ✓. ¿Terminar sin guardar?')) return; S.active=null; save(); render(); return; }
   w.prs=[]; for(const e of w.entries){ const k=ex(e.exId).kind, prev=bestOf(e.exId), b=Math.max(0,...e.sets.filter(s=>s.done&&(k!=='weight'||num(s.r)>0)).map(s=>setMetric(k,s))); if(b>prev && prev>0) w.prs.push({exId:e.exId,v:b}); }
@@ -691,7 +700,7 @@ function finishWorkout(){
     ...res.b.map(b=>`${b.e} Insignia: <b>${b.t}</b>`), ...(L1.l>L0?[`🆙 ¡Subes a nivel ${L1.l+1}: <b>${L1.name}</b>!`]:[])];
   ui.tab='hoy'; render();
   modal(`<span class="big-emo">🎉</span><h2 class="center">¡Entreno completado!</h2>
-    <div class="grid3 mt2"><div class="stat center"><div class="v">${fmtT(end-w.start)}</div><div class="k">TIEMPO</div></div><div class="stat center"><div class="v">${sets}</div><div class="k">SERIES</div></div><div class="stat center"><div class="v">+${xp}</div><div class="k">XP</div></div></div>
+    <div class="grid3 mt2"><div class="stat center"><div class="v">${fmtT(dur(w))}</div><div class="k">TIEMPO</div></div><div class="stat center"><div class="v">${sets}</div><div class="k">SERIES</div></div><div class="stat center"><div class="v">+${xp}</div><div class="k">XP</div></div></div>
     ${items.length?`<div class="card soft mt2">${items.map(i=>`<div style="padding:4px 0">${i}</div>`).join('')}</div>`:''}
     <p class="muted center mt">${['Cada serie te acerca a tu dominada 💖','Constancia > perfección ✨','Tu yo del futuro te lo agradece 🌸','Eres más fuerte que ayer 🦋'][sets%4]}</p>
     <button class="btn mt2" data-a="close">¡Genial! 💖</button>`);
@@ -700,7 +709,7 @@ function finishWorkout(){
 
 /* timers */
 let tickI=null;
-function tick(){ clearInterval(tickI); tickI=setInterval(()=>{ if(!S.active){clearInterval(tickI);return;} const c=$('#clock'); if(c) c.textContent=fmtT(Date.now()-S.active.start); if(ui.holdT){ const h=$('#holdIn'); if(h) h.value=Math.floor((Date.now()-ui.holdT.t0)/1000); } },250); }
+function tick(){ clearInterval(tickI); tickI=setInterval(()=>{ if(!S.active){clearInterval(tickI);return;} const c=$('#clock'); if(c) c.textContent=fmtT(activeMs(S.active)); const pc=$('#pauseClock'); if(pc&&S.active.pausedAt) pc.textContent=fmtT(Date.now()-S.active.pausedAt); if(ui.holdT){ const h=$('#holdIn'); if(h) h.value=Math.floor((Date.now()-ui.holdT.t0)/1000); } },250); }
 let restI=null;
 function startRest(){ ui.restEnd=Date.now()+S.restSec*1000; clearInterval(restI); drawRest(); restI=setInterval(drawRest,250); }
 function stopRest(){ clearInterval(restI); ui.restEnd=0; $('#rest').innerHTML=''; }
@@ -827,6 +836,8 @@ const A = {
   restAdd:()=>{ ui.restEnd+=15000; drawRest(); },
   restSkip:()=>stopRest(),
   finish:()=>finishWorkout(),
+  pause:()=>{ const A=S.active; if(A.pausedAt) return; stopHold(); stopRest(); A.pausedAt=Date.now(); save(); render(); buzz(40); },
+  resume:()=>{ const A=S.active; if(!A.pausedAt) return; A.pausedMs=(A.pausedMs||0)+(Date.now()-A.pausedAt); A.pausedAt=null; save(); render(); buzz(30); toast('💪 ¡Seguimos!'); },
   cancelWo:()=>{ if(confirm('¿Cancelar el entreno? No se guardará.')){ S.active=null; ui.holdT=null; stopRest(); save(); render(); } },
   delW:el=>{ if(confirm('¿Borrar este entreno del historial?')){ const w=S.workouts.find(w=>w.id===el.dataset.v); if(w&&w._s) S._del.push(w.id); S.workouts=S.workouts.filter(w=>w.id!==el.dataset.v); save(); render(); } },
   addPhoto:()=>pickPhoto(),
