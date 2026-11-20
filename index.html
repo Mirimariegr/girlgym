@@ -613,7 +613,12 @@ const genCode = () => Array.from({length:6},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ2345678
 const weekIdx = () => Math.floor(weekStart(Date.now())/(7*864e5));
 const curQ = () => QUESTIONS[weekIdx()%QUESTIONS.length];
 function fmtAgo(t){ t=typeof t==='string'?Date.parse(t):t; const m=Math.round((Date.now()-t)/60000); if(m<1) return 'ahora'; if(m<60) return `hace ${m} min`; const h=Math.round(m/60); if(h<24) return `hace ${h} h`; if(h<48) return 'ayer'; return fmtD(t); }
-function who(id){ const s=ui.soc||{}; if(s.me&&id===s.me.user_id) return {name:'Tú',emoji:s.me.emoji,me:true}; const f=(s.friends||[]).find(x=>x.id===id); return f?{name:f.name,emoji:f.emoji}:{name:'Amiga',emoji:'🌸'}; }
+function who(id){ const s=ui.soc||{}, av=s.avatars||{}; if(s.me&&id===s.me.user_id) return {name:'Tú',emoji:s.me.emoji,me:true,avatar:av[id],username:s.me.username}; const f=(s.friends||[]).find(x=>x.id===id); return f?{name:f.name,emoji:f.emoji,avatar:av[id],username:f.username}:{name:'Amiga',emoji:'🌸'}; }
+function avHtml(w, size=42, attrs=''){ const st=`width:${size}px;height:${size}px;border-radius:50%;flex-shrink:0`;
+  return w.avatar?`<img src="${w.avatar}" alt="" ${attrs} style="${st};object-fit:cover;display:block;border:2px solid var(--pink-l)">`:`<div class="emo" ${attrs} style="${st};font-size:${Math.round(size*.55)}px">${w.emoji||'🌸'}</div>`; }
+const USER_RE=/^[a-z0-9._]{3,20}$/;
+const cleanUser = v => String(v||'').trim().replace(/^@/,'').toLowerCase();
+const suggestUser = n => (String(n||'girl').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,14)||'girl')+Math.floor(10+Math.random()*90);
 function socialBadge(){ const s=ui.soc; if(!s||!s.loaded) return 0; return (s.cheers||[]).filter(c=>!c.read_at).length + (s.friends||[]).filter(f=>f.status==='pending'&&f.incoming).length; }
 
 async function loadSocial(){
@@ -624,16 +629,18 @@ async function loadSocial(){
     else if(me.name!==S.profile.name){ await SB.from('friend_profiles').update({name:S.profile.name.slice(0,40)}).eq('user_id',uid); me.name=S.profile.name; }
     const [a,b]=await Promise.all([SB.from('friendships').select('*').eq('requester',uid), SB.from('friendships').select('*').eq('addressee',uid)]);
     const fs=[...(a.data||[]),...(b.data||[])], ids=fs.map(f=>f.requester===uid?f.addressee:f.requester);
-    const profs=ids.length?((await SB.from('friend_profiles').select('user_id,name,emoji').in('user_id',ids)).data||[]):[];
-    const friends=fs.map(f=>{ const id=f.requester===uid?f.addressee:f.requester, p=profs.find(x=>x.user_id===id)||{name:'Amiga',emoji:'🌸'}; return {id, fid:f.id, status:f.status, incoming:f.addressee===uid, name:p.name, emoji:p.emoji}; });
+    const profs=ids.length?((await SB.from('friend_profiles').select('user_id,name,emoji,username,avatar_path').in('user_id',ids)).data||[]):[];
+    const friends=fs.map(f=>{ const id=f.requester===uid?f.addressee:f.requester, p=profs.find(x=>x.user_id===id)||{name:'Amiga',emoji:'🌸'}; return {id, fid:f.id, status:f.status, incoming:f.addressee===uid, name:p.name, emoji:p.emoji, username:p.username, avatar_path:p.avatar_path}; });
     const acc=friends.filter(f=>f.status==='accepted').map(f=>f.id);
     const posts=(await SB.from('posts').select('*').in('user_id',[uid,...acc]).order('created_at',{ascending:false}).limit(40)).data||[];
     const pids=posts.map(p=>p.id), none={data:[]};
     const [rp,rc,ch]=await Promise.all([pids.length?SB.from('post_replies').select('*').in('post_id',pids).order('created_at'):none, pids.length?SB.from('post_reactions').select('*').in('post_id',pids):none,
       SB.from('cheers').select('*').eq('to_user',uid).order('created_at',{ascending:false}).limit(30)]);
+    const avatars={}, apaths=[me,...friends].filter(x=>x.avatar_path).map(x=>[x.user_id||x.id, x.avatar_path]);
+    if(apaths.length){ const u=await SB.storage.from('avatars').createSignedUrls(apaths.map(x=>x[1]),3600); (u.data||[]).forEach((x,i)=>{ if(x&&x.signedUrl) avatars[apaths[i][0]]=x.signedUrl; }); }
     const imgs={}, paths=posts.map(p=>(p.data||{}).img).filter(Boolean);
     if(paths.length){ const u=await SB.storage.from('feed').createSignedUrls(paths,3600); (u.data||[]).forEach((x,i)=>{ if(x&&x.signedUrl) imgs[paths[i]]=x.signedUrl; }); }
-    ui.soc={me, friends, posts, imgs, replies:rp.data||[], reactions:rc.data||[], cheers:ch.data||[], loaded:true, err:false};
+    ui.soc={me, friends, posts, imgs, avatars, replies:rp.data||[], reactions:rc.data||[], cheers:ch.data||[], loaded:true, err:false};
     if(S.profile){ const nb=checkBadges(); nb.forEach(x=>{ toast(x.e+' Insignia: '+x.t); postActivity('badge','',{id:x.id}); }); if(nb.length) save(); }
   }catch(e){ console.warn('social',e); ui.soc={...(ui.soc||{}), loaded:true, err:true, errMsg:errText(e)}; }
   if(!S || S.active || $('.ov')) return;
@@ -654,17 +661,17 @@ function postHtml(p){
   else if(p.kind==='answer') body=`<div class="tiny">${w.me?'TU RESPUESTA':esc(w.name.toUpperCase())+' RESPONDIÓ'} · ${esc(QUESTIONS[d.q]||'')}</div><div class="mt" style="font-size:16px">${esc(p.text||'')}</div>`;
   const rs=(ui.soc.reactions||[]).filter(r=>r.post_id===p.id), mine=rs.find(r=>r.user_id===USER.id), reps=(ui.soc.replies||[]).filter(r=>r.post_id===p.id), open=ui.openPost===p.id;
   return `<div class="card" style="padding:14px">
-    <div class="row" style="align-items:flex-start"><div class="emo" style="font-size:24px">${w.emoji}</div><div class="grow"><div>${body}</div><div class="tiny mt" style="margin-top:4px">${fmtAgo(p.created_at)}${w.me?` · <button class="link" style="font-size:12px;color:var(--ink-3)" data-a="delPost" data-v="${p.id}">Borrar</button>`:''}</div></div></div>
+    <div class="row" style="align-items:flex-start">${avHtml(w,44)}<div class="grow"><div>${body}</div><div class="tiny mt" style="margin-top:4px">${fmtAgo(p.created_at)}${w.me?` · <button class="link" style="font-size:12px;color:var(--ink-3)" data-a="delPost" data-v="${p.id}">Borrar</button>`:''}</div></div></div>
     <div class="row mt" style="gap:6px">${['💖','🔥','👏'].map(e=>{ const n=rs.filter(r=>r.emoji===e).length; return `<button class="pill ${mine&&mine.emoji===e?'pk':''}" style="padding:6px 10px;font-size:14px${mine&&mine.emoji===e?';outline:2px solid var(--pink)':''}" data-a="react" data-v="${p.id}" data-e="${e}">${e}${n?' '+n:''}</button>`; }).join('')}
       <button class="link" style="margin-left:auto;font-size:13px" data-a="openPost" data-v="${p.id}">💬 ${reps.length?reps.length+' ':''}Responder</button></div>
-    ${reps.length||open?`<div style="margin-top:10px;padding-left:10px;border-left:3px solid var(--line)">${reps.map(r=>{ const x=who(r.user_id); return `<div style="padding:4px 0"><b>${x.emoji} ${esc(x.name)}</b> <span class="tiny">${fmtAgo(r.created_at)}</span><div>${esc(r.text)}</div></div>`; }).join('')}
+    ${reps.length||open?`<div style="margin-top:10px;padding-left:10px;border-left:3px solid var(--line)">${reps.map(r=>{ const x=who(r.user_id); return `<div style="padding:4px 0" class="row"><span style="align-self:flex-start">${avHtml(x,26)}</span><div><b>${esc(x.name)}</b> <span class="tiny">${fmtAgo(r.created_at)}</span><div>${esc(r.text)}</div></div></div>`; }).join('')}
       ${open?`<form class="row mt" data-reply="${p.id}" style="gap:6px"><input class="field" name="t" placeholder="Escribe algo bonito…" maxlength="300" autocomplete="off" style="padding:10px 12px;font-size:15px"><button class="btn sm" type="submit">➤</button></form>`:''}</div>`:''}
   </div>`;
 }
 function cheerBanner(){
   const s=ui.soc; if(!s||!s.loaded) return ''; const c=(s.cheers||[]).find(x=>!x.read_at); if(!c) return '';
   const w=who(c.from_user), more=s.cheers.filter(x=>!x.read_at).length-1;
-  return `<div class="card" style="background:linear-gradient(135deg,#FFF0F7,#F1E9FF);border:2px solid var(--line)"><div class="row"><span style="font-size:34px">💌</span><div class="grow"><div class="tiny">${esc(w.name).toUpperCase()} TE MANDA ÁNIMO ${w.emoji}</div><div class="name" style="font-size:18px">${esc(c.text)}</div></div></div>
+  return `<div class="card" style="background:linear-gradient(135deg,#FFF0F7,#F1E9FF);border:2px solid var(--line)"><div class="row">${avHtml(w,48)}<div class="grow"><div class="tiny">💌 ${esc(w.name).toUpperCase()} TE MANDA ÁNIMO</div><div class="name" style="font-size:18px">${esc(c.text)}</div></div></div>
     <div class="row mt" style="gap:8px"><button class="btn sm" data-a="readCheer" data-v="${c.id}">Gracias 💖</button><button class="btn sm ghost" data-a="cheerTo" data-v="${c.from_user}">Devolver ánimo</button>${more>0?`<span class="tiny">+${more} más</span>`:''}</div></div>`;
 }
 function viewAmigas(){
@@ -676,15 +683,18 @@ function viewAmigas(){
   const wk=weekStart(Date.now()), qi=weekIdx()%QUESTIONS.length, myAns=s.posts.find(p=>p.kind==='answer'&&p.user_id===USER.id&&(p.data||{}).q===qi&&Date.parse(p.created_at)>=wk);
   const open=!!ui.colOpen;
   return `<div class="wrap">${H}
+    ${!s.me.username?`<div class="card" style="border:2px solid var(--pink)"><div class="row"><span style="font-size:30px">✨</span><div class="grow"><h3 style="margin:0">Elige tu nombre de usuario</h3><div class="tiny">Así tus amigas te encuentran fácil: @tunombre</div></div></div>
+      <form id="userForm" class="row mt" style="gap:6px"><input class="field" name="u" value="${esc(ui.userDraft||suggestUser(S.profile.name))}" maxlength="21" autocapitalize="off" autocomplete="off"><button class="btn sm" type="submit">Guardar</button></form>
+      <p class="tiny mt">3–20 letras, números, punto o guion bajo. Sin espacios.</p></div>`:''}
     ${cheerBanner()}
-    ${inc.map(f=>`<div class="card soft"><div class="row"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">Quiere seguirte en GirlGym</div></div></div>
+    ${inc.map(f=>`<div class="card soft"><div class="row">${avHtml(who(f.id))}<div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">${f.username?'@'+esc(f.username)+' · ':''}Quiere seguirte en GirlGym</div></div></div>
       <div class="row mt" style="gap:8px"><button class="btn sm" data-a="acceptF" data-v="${f.fid}">Aceptar 💖</button><button class="btn sm ghost" data-a="removeF" data-v="${f.fid}">Ahora no</button></div></div>`).join('')}
-    <button class="card row" style="width:100%;text-align:left;gap:12px" data-a="compose"><div class="emo" style="font-size:24px">${s.me.emoji}</div><div class="grow muted">¿Qué quieres compartir hoy? ✨</div><span class="btn sm">📸</span></button>
-    <div class="card" style="padding:14px"><div class="row between" data-a="toggleCol" style="cursor:pointer"><div><div class="name">👯‍♀️ Mis GirlGym colleagues · ${acc.length}</div><div class="tiny">Tu código: <b style="color:var(--pink-d);letter-spacing:1px">${s.me.code}</b> · <span style="color:var(--pink-d)">${open?'Ocultar ▴':'Gestionar ▾'}</span></div></div><div class="row" style="gap:-6px">${acc.slice(0,4).map(f=>`<span style="font-size:22px">${f.emoji}</span>`).join('')}</div></div>
-      ${open?`<div class="row mt" style="gap:8px;flex-wrap:wrap"><button class="btn sm lila" data-a="shareCode">📤 Invitar</button><button class="btn sm ghost" data-a="addFriend">＋ Añadir con código</button><button class="btn sm ghost" data-a="avatar">${s.me.emoji} Mi avatar</button></div>
-      ${acc.map(f=>{ const n=s.posts.filter(p=>p.user_id===f.id&&p.kind==='workout'&&Date.parse(p.created_at)>=wk).length; return `<div class="item"><button class="emo" data-a="friendMenu" data-v="${f.fid}" aria-label="Opciones de ${esc(f.name)}">${f.emoji}</button><div class="grow" data-a="friendMenu" data-v="${f.fid}" style="cursor:pointer"><div class="name">${esc(f.name)} <span class="tiny">⋯</span></div><div class="tiny">${n?`💪 ${n} entreno${n>1?'s':''} esta semana`:'Aún sin entrenos esta semana'}</div></div><button class="btn sm" data-a="cheerTo" data-v="${f.id}">💌</button></div>`; }).join('')}
-      ${out.map(f=>`<div class="item"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">⏳ Solicitud enviada</div></div><button class="btn sm ghost" data-a="cancelF" data-v="${f.fid}">Cancelar</button></div>`).join('')}
-      ${!acc.length&&!out.length?'<p class="muted mt">Invita a tus amigas con tu código y os iréis animando 💖</p>':''}`:''}</div>
+    <button class="card row" style="width:100%;text-align:left;gap:12px" data-a="compose">${avHtml(who(USER.id),44)}<div class="grow muted">¿Qué quieres compartir hoy? ✨</div><span class="btn sm">📸</span></button>
+    <div class="card" style="padding:14px"><div class="row between" data-a="toggleCol" style="cursor:pointer"><div><div class="name">👯‍♀️ Mis GirlGym colleagues · ${acc.length}</div><div class="tiny">${s.me.username?`Tú eres <b style="color:var(--pink-d)">@${esc(s.me.username)}</b> · `:''}<span style="color:var(--pink-d)">${open?'Ocultar ▴':'Gestionar ▾'}</span></div></div><div class="row" style="gap:2px">${acc.slice(0,4).map(f=>avHtml(who(f.id),28)).join('')}</div></div>
+      ${open?`<div class="row mt" style="gap:8px;flex-wrap:wrap"><button class="btn sm lila" data-a="shareCode">📤 Invitar</button><button class="btn sm ghost" data-a="addFriend">＋ Añadir amiga</button><button class="btn sm ghost" data-a="profile">👤 Mi perfil</button></div>
+      ${acc.map(f=>{ const n=s.posts.filter(p=>p.user_id===f.id&&p.kind==='workout'&&Date.parse(p.created_at)>=wk).length; return `<div class="item"><button data-a="friendMenu" data-v="${f.fid}" aria-label="Opciones de ${esc(f.name)}" style="padding:0">${avHtml(who(f.id))}</button><div class="grow" data-a="friendMenu" data-v="${f.fid}" style="cursor:pointer"><div class="name">${esc(f.name)} <span class="tiny">${f.username?'@'+esc(f.username):''} ⋯</span></div><div class="tiny">${n?`💪 ${n} entreno${n>1?'s':''} esta semana`:'Aún sin entrenos esta semana'}</div></div><button class="btn sm" data-a="cheerTo" data-v="${f.id}">💌</button></div>`; }).join('')}
+      ${out.map(f=>`<div class="item">${avHtml(who(f.id))}<div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">⏳ Solicitud enviada</div></div><button class="btn sm ghost" data-a="cancelF" data-v="${f.fid}">Cancelar</button></div>`).join('')}
+      ${!acc.length&&!out.length?'<p class="muted mt">Invita a tus amigas: que te busquen por tu @usuario 💖</p>':''}`:''}</div>
     <div class="card" style="background:linear-gradient(135deg,#FF7DB4,#C49BFF);color:#fff"><div class="tiny" style="color:#fff">PREGUNTA DE LA SEMANA</div><h3 style="margin-top:4px;font-size:18px">${curQ()}</h3>
       ${myAns?`<p class="mt" style="opacity:.95">Tu respuesta: <b>${esc(myAns.text)}</b></p>`:`<form id="answerForm" class="row mt" style="gap:6px"><input class="field" name="t" placeholder="Tu respuesta…" maxlength="300" autocomplete="off"><button class="btn sm white" type="submit">➤</button></form>`}</div>
     <div class="row between mt2" style="margin-bottom:10px"><h3 style="margin:0">Feed</h3><button class="link" data-a="socReload">↻ Actualizar</button></div>
@@ -711,6 +721,16 @@ async function publishComposer(btn){
     const r=await SB.from('posts').insert({id, user_id:USER.id, kind:c.wo?'workout':'post', text:text||null, data}); if(r.error) throw r.error;
     closeModal(); confetti(30); addXP(15); save(); toast('💞 ¡Publicado! +15 XP'); ui.tab='amigas'; ui.soc={...(ui.soc||{}),loaded:false}; render(); loadSocial();
   }catch(e){ console.warn(e); btn.disabled=false; btn.textContent='Publicar 💞'; toast('⚠️ No se pudo publicar: '+errText(e).slice(0,80)); }
+}
+function profileModal(){
+  const me=ui.soc.me, w=who(USER.id);
+  modal(`<h2 class="center">Mi perfil</h2>
+    <div style="display:flex;justify-content:center" class="mt">${avHtml(w,110,'data-a="profPhoto"')}</div>
+    <div class="row mt" style="justify-content:center;gap:8px"><button class="btn sm" data-a="profPhoto">📸 ${w.avatar?'Cambiar foto':'Poner foto'}</button>${w.avatar?`<button class="btn sm ghost" data-a="profNoPhoto">Quitar</button>`:`<button class="btn sm ghost" data-a="avatar">${me.emoji} Emoji</button>`}</div>
+    <p class="tiny mt2">NOMBRE DE USUARIO</p>
+    <form id="userForm" class="row mt" style="gap:6px"><input class="field" name="u" value="${esc(me.username||suggestUser(S.profile.name))}" maxlength="21" autocapitalize="off" autocomplete="off"><button class="btn sm" type="submit">Guardar</button></form>
+    <p class="tiny mt">Tus amigas te añaden escribiendo <b>@${esc(me.username||'tunombre')}</b>. 3–20 letras, números, punto o guion bajo.</p>
+    <p class="tiny center mt2">🔒 Tu foto solo la ven tus colleagues y quien te envíe o reciba una solicitud.</p>`);
 }
 function cheerModal(id){
   const w=who(id);
@@ -1207,16 +1227,28 @@ const A = {
   changeExVid:el=>{ delete ex(el.dataset.id).video; save(); exVideoModal(el.dataset.id); },
   askGlowEx:el=>{ const e=ex(el.dataset.id); closeModal(); if(S.active){ ui.woCoach=true; } ui.tab='coach'; render(); coachSend(`¿Cómo se hace bien "${e.name}"? Explícamelo paso a paso.`); },
   socReload:()=>{ ui.soc={...(ui.soc||{}),loaded:false}; render(); loadSocial(); },
-  shareCode:async()=>{ const c=ui.soc.me.code, t=`¡Entrena conmigo en GirlGym! 💖 Añádeme con mi código: ${c}`;
+  shareCode:async()=>{ const m=ui.soc.me, c=m.username?'@'+m.username:m.code, t=`¡Entrena conmigo en GirlGym! 💖 Búscame como ${c}`;
     try{ if(navigator.share){ await navigator.share({title:'GirlGym', text:t, url:appUrl()}); return; } }catch(e){ return; }
     try{ await navigator.clipboard.writeText(t+' '+appUrl()); toast('📋 Invitación copiada'); }catch(e){ toast('Tu código: '+c); } },
-  addFriend:()=>modal(`<span class="big-emo">👯‍♀️</span><h2 class="center">Añadir amiga</h2><p class="muted center">Pídele su código (lo tiene en su pestaña Amigas)</p>
-    <form id="friendForm" class="mt2"><input class="field center" name="c" placeholder="ABC123" maxlength="6" autocapitalize="characters" autocomplete="off" style="font-size:24px;letter-spacing:4px;text-transform:uppercase"><button class="btn mt" type="submit">Enviar solicitud 💌</button></form>`),
+  addFriend:()=>modal(`<span class="big-emo">👯‍♀️</span><h2 class="center">Añadir amiga</h2><p class="muted center">Escribe su nombre de usuario (lo ve en Feed → Mis colleagues)</p>
+    <form id="friendForm" class="mt2"><input class="field center" name="c" placeholder="@nombre" maxlength="21" autocapitalize="off" autocomplete="off" style="font-size:22px"><button class="btn mt" type="submit">Enviar solicitud 💌</button></form>`),
+  profile:()=>profileModal(),
+  profPhoto:()=>{ const i=document.createElement('input'); i.type='file'; i.accept='image/*';
+    i.onchange=()=>{ const f=i.files[0]; if(!f) return; const img=new Image(), url=URL.createObjectURL(f);
+      img.onload=async()=>{ const S2=400, m=Math.min(img.width,img.height), c=document.createElement('canvas'); c.width=c.height=S2; c.getContext('2d').drawImage(img,(img.width-m)/2,(img.height-m)/2,m,m,0,0,S2,S2); URL.revokeObjectURL(url);
+        toast('📸 Subiendo…'); try{ const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.85)), old=ui.soc.me.avatar_path, path=`${USER.id}/avatar-${Date.now()}.jpg`;
+          let r=await SB.storage.from('avatars').upload(path, blob, {contentType:'image/jpeg'}); if(r.error) throw r.error;
+          r=await SB.from('friend_profiles').update({avatar_path:path}).eq('user_id',USER.id); if(r.error) throw r.error;
+          if(old) SB.storage.from('avatars').remove([old]);
+          ui.soc.me.avatar_path=path; ui.soc.avatars={...(ui.soc.avatars||{}), [USER.id]:c.toDataURL('image/jpeg',.85)}; profileModal(); render(); toast('✨ ¡Foto de perfil lista!'); }
+        catch(e){ toast('⚠️ No se pudo subir: '+errText(e).slice(0,80)); } };
+      img.src=url; }; i.click(); },
+  profNoPhoto:async()=>{ const old=ui.soc.me.avatar_path; await SB.from('friend_profiles').update({avatar_path:null}).eq('user_id',USER.id); if(old) SB.storage.from('avatars').remove([old]); ui.soc.me.avatar_path=null; delete (ui.soc.avatars||{})[USER.id]; profileModal(); render(); },
   acceptF:async el=>{ const r=await SB.from('friendships').update({status:'accepted'}).eq('id',el.dataset.v); if(r.error){ toast('⚠️ No se pudo aceptar'); return; } confetti(30); toast('👯‍♀️ ¡Ya sois amigas!'); await loadSocial(); },
   removeF:async el=>{ await SB.from('friendships').delete().eq('id',el.dataset.v); loadSocial(); },
   cancelF:async el=>{ if(!confirm('¿Cancelar la solicitud?')) return; await SB.from('friendships').delete().eq('id',el.dataset.v); toast('Solicitud cancelada'); loadSocial(); },
   friendMenu:el=>{ const f=ui.soc.friends.find(x=>x.fid===el.dataset.v); if(!f) return;
-    modal(`<div class="center"><span class="big-emo">${f.emoji}</span><h2>${esc(f.name)}</h2><p class="muted">Amigas en GirlGym 👯‍♀️</p></div>
+    modal(`<div class="center"><div style="display:flex;justify-content:center">${avHtml(who(f.id),96)}</div><h2 class="mt">${esc(f.name)}</h2><p class="muted">${f.username?'@'+esc(f.username)+' · ':''}Amigas en GirlGym 👯‍♀️</p></div>
       <button class="btn mt2" data-a="cheerTo" data-v="${f.id}">💌 Mandarle ánimo</button>
       <button class="btn ghost mt" data-a="unfriend" data-v="${f.fid}">Dejar de seguir</button>
       <p class="tiny center mt">Si dejas de seguirla, ninguna de las dos verá ya la actividad de la otra. Ella no recibe ningún aviso.</p>`); },
@@ -1232,7 +1264,7 @@ const A = {
     else await SB.from('post_reactions').upsert({post_id:id,user_id:USER.id,emoji:e}); },
   openPost:el=>{ ui.openPost=ui.openPost===el.dataset.v?null:el.dataset.v; render(); const f=$(`[data-reply="${ui.openPost}"] input`); if(f) f.focus(); },
   avatar:()=>modal(`<h2 class="center">Elige tu avatar</h2><div class="grid3 mt2" style="grid-template-columns:repeat(4,1fr)">${AVATARS.map(a=>`<button class="opt" style="justify-content:center;font-size:30px;margin:0" data-a="setAvatar" data-v="${a}">${a}</button>`).join('')}</div>`),
-  setAvatar:async el=>{ ui.soc.me.emoji=el.dataset.v; closeModal(); render(); await SB.from('friend_profiles').update({emoji:el.dataset.v}).eq('user_id',USER.id); },
+  setAvatar:async el=>{ ui.soc.me.emoji=el.dataset.v; profileModal(); render(); await SB.from('friend_profiles').update({emoji:el.dataset.v}).eq('user_id',USER.id); },
   shareAct:el=>{ S.social.share=el.dataset.v==='1'; save(); render(); toast(S.social.share?'✨ Tus amigas verán tus logros':'🔒 Tu actividad ya no se comparte'); },
   coachAsk:el=>coachSend(el.dataset.v),
   coachClear:()=>{ if(!confirm('¿Empezar una conversación nueva?')) return; S.chat=[]; save(); render(); },
@@ -1321,10 +1353,17 @@ document.addEventListener('input', e=>{
 });
 document.addEventListener('submit', async e=>{
   if(e.target.id==='authForm'){ e.preventDefault(); submitAuth(e.target); }
-  if(e.target.id==='friendForm'){ e.preventDefault(); const code=String(new FormData(e.target).get('c')||'').trim().toUpperCase();
-    if(!/^[A-Z0-9]{6}$/.test(code)){ toast('El código tiene 6 letras o números'); return; }
-    const r=await SB.rpc('find_friend_code',{p_code:code}); const f=r.data&&r.data[0];
-    if(!f){ toast('🙈 No encuentro ese código'); return; }
+  if(e.target.id==='userForm'){ e.preventDefault(); const u=cleanUser(new FormData(e.target).get('u'));
+    if(!USER_RE.test(u)){ toast('Usa 3–20 letras, números, punto o _ (sin espacios)'); return; }
+    const r=await SB.from('friend_profiles').update({username:u}).eq('user_id',USER.id);
+    if(r.error){ ui.userDraft=u; toast(r.error.code==='23505'?`😅 @${u} ya está cogido, prueba otro`:'⚠️ No se pudo guardar: '+errText(r.error).slice(0,60)); return; }
+    ui.soc.me.username=u; ui.userDraft=null; if($('.ov')) profileModal(); render(); toast(`✨ ¡Ahora eres @${u}!`); }
+  if(e.target.id==='friendForm'){ e.preventDefault(); const raw=String(new FormData(e.target).get('c')||'').trim(), u=cleanUser(raw);
+    if(!u){ toast('Escribe su nombre de usuario'); return; }
+    let r=await SB.rpc('find_friend_username',{p_username:u}); let f=r.data&&r.data[0];
+    if(!f && /^[A-Za-z0-9]{6}$/.test(raw)){ r=await SB.rpc('find_friend_code',{p_code:raw.toUpperCase()}); f=r.data&&r.data[0]; }
+    if(r.error&&!f){ toast('⚠️ '+errText(r.error).slice(0,80)); return; }
+    if(!f){ toast(`🙈 No encuentro a @${u}`); return; }
     if(ui.soc.friends.some(x=>x.id===f.user_id)){ toast(`Ya estás conectada con ${f.name} 💖`); closeModal(); return; }
     const ins=await SB.from('friendships').insert({id:uuid(), requester:USER.id, addressee:f.user_id, status:'pending'});
     if(ins.error){ toast('⚠️ No se pudo enviar'); return; }
