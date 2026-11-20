@@ -621,6 +621,19 @@ const cleanUser = v => String(v||'').trim().replace(/^@/,'').toLowerCase();
 const suggestUser = n => (String(n||'girl').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,14)||'girl')+Math.floor(10+Math.random()*90);
 function socialBadge(){ const s=ui.soc; if(!s||!s.loaded) return 0; return (s.cheers||[]).filter(c=>!c.read_at).length + (s.friends||[]).filter(f=>f.status==='pending'&&f.incoming).length; }
 
+async function setupSocialProfile(d){
+  // Crea tu perfil social con el @usuario y la foto que elegiste al registrarte
+  const uid=USER.id;
+  try{
+    const r0=await SB.from('friend_profiles').select('user_id').eq('user_id',uid).maybeSingle();
+    if(!r0.data){ for(let i=0;i<5;i++){ const r=await SB.from('friend_profiles').insert({user_id:uid, name:d.name.slice(0,40), emoji:'🌸', code:genCode(), username:d.username||null});
+        if(!r.error) break; if(r.error.code!=='23505') throw r.error; if(/username/.test(r.error.message||'')){ d.username=null; toast('Ese @usuario se acaba de coger 🙈 elige otro en Feed'); } } }
+    else if(d.username){ await SB.from('friend_profiles').update({username:d.username, name:d.name.slice(0,40)}).eq('user_id',uid); }
+    if(d.photo){ const blob=await (await fetch(d.photo)).blob(), path=`${uid}/avatar-${Date.now()}.jpg`;
+      const up=await SB.storage.from('avatars').upload(path, blob, {contentType:'image/jpeg'}); if(!up.error) await SB.from('friend_profiles').update({avatar_path:path}).eq('user_id',uid); }
+  }catch(e){ console.warn('profile setup', e); }
+  loadSocial();
+}
 async function loadSocial(){
   if(!SB||!USER||!S||!S.profile) return; const uid=USER.id; ui.socAt=Date.now();
   try{
@@ -859,8 +872,19 @@ function newPasswordModal(){
 }
 
 /* ---------- Onboarding ---------- */
+function onbSteps(){ return ['name', ...(SB&&USER?['profile']:[]), 'days', 'level']; }
 function viewOnb(){
-  const d=ui.onbData;
+  const d=ui.onbData, ids=onbSteps(), cur=ids[ui.onb]||'name';
+  if(cur==='profile') return `<div class="wrap onb"><span class="big-emo">🪞</span><h1 class="center">Tu perfil</h1>
+     <p class="muted center mt">Así te verán y te encontrarán tus amigas en GirlGym 👯‍♀️</p>
+     <div style="display:flex;justify-content:center" class="mt2"><button data-a="onbPhoto" aria-label="Elegir foto" style="padding:0;position:relative">${d.photo?`<img src="${d.photo}" alt="" style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid var(--pink)">`:`<div class="emo" style="width:120px;height:120px;border-radius:50%;font-size:54px;border:3px dashed var(--pink)">🌸</div>`}
+       <span style="position:absolute;right:0;bottom:4px;background:var(--pink);color:#fff;border-radius:50%;width:38px;height:38px;line-height:38px;font-size:18px;box-shadow:0 3px 0 var(--pink-d)">📸</span></button></div>
+     <p class="tiny center mt">${d.photo?'¡Qué guapa! Toca para cambiarla':'Añade tu foto (opcional)'}</p>
+     <p class="tiny mt2">TU NOMBRE DE USUARIO</p>
+     <div class="row mt" style="gap:0"><span class="f" style="font-size:22px;color:var(--pink-d);padding:0 6px 0 2px">@</span><input class="field" id="onbUser" value="${esc(d.username||suggestUser(d.name))}" maxlength="20" autocapitalize="off" autocomplete="off"></div>
+     <p class="tiny mt">3–20 letras, números, punto o _ · Tus amigas te buscarán así</p>
+     <button class="btn mt2" data-a="onbProfile">Siguiente ✨</button>
+     <p class="tiny center mt2">${ui.onb+1} / ${ids.length}</p></div>`;
   const steps=[
     `<span class="big-emo">💖</span><h1 class="center" style="font-size:30px">¡Hola! Soy GirlGym</h1>
      <p class="muted center mt">Vamos a por tu <b>primera dominada</b>, paso a pasito y sin agobios.</p>
@@ -877,7 +901,8 @@ function viewOnb(){
      ${[['🌱','Aún me cuesta colgarme de la barra'],['🦋','Me cuelgo bien, pero no consigo subir'],['💫','Ya hago negativas o con banda']].map((o,i)=>`<button class="opt ${d.lvl===i?'on':''}" data-a="onbLvl" data-v="${i}"><span style="font-size:28px">${o[0]}</span><span class="name">${o[1]}</span></button>`).join('')}
      <button class="btn mt2" data-a="onbDone">¡Empezar! 💪</button>`
   ];
-  return `<div class="wrap onb">${steps[ui.onb]}<p class="tiny center mt2">${ui.onb+1} / 3</p></div>`;
+  const idx={name:0,days:1,level:2}[cur];
+  return `<div class="wrap onb">${steps[idx]}<p class="tiny center mt2">${ui.onb+1} / ${ids.length}</p></div>`;
 }
 function buildPlan(days, old={}){
   // Reparte los entrenos según el nº de días. Si ya existía un entreno de ese tipo
@@ -1201,7 +1226,15 @@ const A = {
   onbNext:()=>{ if(ui.onb===0){ const n=$('#onbName').value.trim(); if(!n){ toast('Escribe tu nombre 💖'); return;} ui.onbData.name=n; } ui.onb++; render(); },
   onbDay:el=>{ const d=+el.dataset.v, a=ui.onbData.days; ui.onbData.days=a.includes(d)?a.filter(x=>x!==d):[...a,d]; render(); },
   onbLvl:el=>{ ui.onbData.lvl=+el.dataset.v; render(); },
-  onbDone:()=>{ const d=ui.onbData; S.profile={name:d.name, days:d.days, since:Date.now()}; S.plan=buildPlan(d.days);
+  onbPhoto:()=>{ const u=$('#onbUser'); if(u) ui.onbData.username=u.value; const i=document.createElement('input'); i.type='file'; i.accept='image/*';
+    i.onchange=()=>{ const f=i.files[0]; if(!f) return; const img=new Image(), url=URL.createObjectURL(f);
+      img.onload=()=>{ const Z=400, m=Math.min(img.width,img.height), c=document.createElement('canvas'); c.width=c.height=Z; c.getContext('2d').drawImage(img,(img.width-m)/2,(img.height-m)/2,m,m,0,0,Z,Z); URL.revokeObjectURL(url); ui.onbData.photo=c.toDataURL('image/jpeg',.85); render(); };
+      img.src=url; }; i.click(); },
+  onbProfile:async el=>{ const u=cleanUser($('#onbUser')?.value); if(!USER_RE.test(u)){ toast('Usa 3–20 letras, números, punto o _ (sin espacios)'); return; }
+    el.disabled=true; let taken=false; try{ const r=await SB.rpc('find_friend_username',{p_username:u}); taken=!!(r.data&&r.data.length); }catch(e){}
+    el.disabled=false; if(taken){ ui.onbData.username=u; toast(`😅 @${u} ya está cogido, prueba otro`); return; }
+    ui.onbData.username=u; ui.onb++; render(); },
+  onbDone:()=>{ const d=ui.onbData; S.profile={name:d.name, days:d.days, since:Date.now()}; S.plan=buildPlan(d.days); if(SB&&USER) setupSocialProfile({...d});
     const pre=[[],['r1','r2'],['r1','r2','r3','r4','r5']][d.lvl]; pre.forEach(id=>S.road[id]=Date.now());
     save(); render(); confetti(); toast(`¡Bienvenida, ${d.name}! 💖`); },
   start:el=>checkin(el.dataset.v),
