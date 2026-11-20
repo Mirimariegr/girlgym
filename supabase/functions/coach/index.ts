@@ -1,7 +1,7 @@
 // GirlGym 💬 Coach — Supabase Edge Function que habla con Claude.
 // La clave de Anthropic vive SOLO aquí (secreto ANTHROPIC_API_KEY), nunca en la app.
 import Anthropic from "npm:@anthropic-ai/sdk";
-import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 
 const DAILY_LIMIT = 30;          // preguntas por persona y día (control de gasto)
 const MAX_MESSAGES = 20;         // historial que se envía
