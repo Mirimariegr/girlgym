@@ -495,17 +495,17 @@ function render(){
   if(!S.profile){ app.innerHTML=viewOnb(); return; }
   if(S.active && ui.woCoach){ app.innerHTML=`<div class="wrap" style="padding-bottom:0;position:sticky;top:0;z-index:25;padding-top:calc(10px + env(safe-area-inset-top))"><button class="btn sm lila" data-a="backToWo">← Volver al entreno (${fmtT(activeMs(S.active))})</button></div>`+viewCoach()+'<style>.chatbar{bottom:calc(16px + env(safe-area-inset-bottom))}</style>'; const c=$('#chatEnd'); if(c) c.scrollIntoView({block:'end'}); return; }
   if(S.active){ app.innerHTML=viewWorkout(); tick(); return; }
-  const v={hoy:viewHoy,plan:viewPlan,amigas:viewAmigas,coach:viewCoach,logros:viewLogros,datos:viewDatos}[ui.tab]();
+  const v={hoy:viewHoy,plan:viewPlan,amigas:viewAmigas,coach:viewCoach,logros:viewLogros,datos:viewDatos,ajustes:viewAjustes}[ui.tab]();
   app.innerHTML = v + nav();
   if(ui.tab==='coach'){ const c=$('#chatEnd'); if(c) c.scrollIntoView({block:'end'}); }
   if(ui.tab==='datos') loadPhotos();
 }
 function nav(){
   const b=(id,ic,l)=>`<button class="${ui.tab===id?'on':''}" data-a="tab" data-v="${id}"><span class="ic">${ic}</span>${l}</button>`;
-  const n=socialBadge(), yo=ui.tab==='logros'||ui.tab==='datos';
+  const n=socialBadge(), yo=['logros','datos','ajustes'].includes(ui.tab);
   return `<nav class="bottom">${b('hoy','🏠','Hoy')}${b('plan','🗓️','Plan')}<button class="${ui.tab==='amigas'?'on':''}" data-a="tab" data-v="amigas" style="position:relative"><span class="ic">👯‍♀️</span>Amigas${n?`<span style="position:absolute;top:2px;right:14%;background:var(--pink);color:#fff;border-radius:99px;font-size:10px;min-width:18px;height:18px;line-height:18px;padding:0 4px">${n}</span>`:''}</button>${b('coach','💬','Coach')}<button class="${yo?'on':''}" data-a="tab" data-v="${ui.yoTab||'logros'}"><span class="ic">🌟</span>Yo</button></nav>`;
 }
-function header(title, sub){ const yo=ui.tab==='logros'||ui.tab==='datos'; return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="chip-xp">${USER?`<span id="syncDot" title="Nube">${syncIcon()}</span> `:''}✨ ${S.xp} XP</div></div>${yo?`<div class="seg" style="margin-bottom:14px"><button class="${ui.tab==='logros'?'on':''}" data-a="tab" data-v="logros">🏆 Logros</button><button class="${ui.tab==='datos'?'on':''}" data-a="tab" data-v="datos">📈 Progreso</button></div>`:''}`; }
+function header(title, sub){ const yo=['logros','datos','ajustes'].includes(ui.tab); return `<div class="top"><div><h1>${title}</h1>${sub?`<div class="sub">${sub}</div>`:''}</div><div class="chip-xp">${USER?`<span id="syncDot" title="Nube">${syncIcon()}</span> `:''}✨ ${S.xp} XP</div></div>${yo?`<div class="seg" style="margin-bottom:14px"><button class="${ui.tab==='logros'?'on':''}" data-a="tab" data-v="logros">🏆 Logros</button><button class="${ui.tab==='datos'?'on':''}" data-a="tab" data-v="datos">📈 Progreso</button><button class="${ui.tab==='ajustes'?'on':''}" data-a="tab" data-v="ajustes">⚙️ Ajustes</button></div>`:''}`; }
 
 /* ---------- Check-in de energía ---------- */
 function checkin(day, o={}){ ui.ci={day, sym:[], step:1, o}; ciRender(); }
@@ -692,6 +692,19 @@ async function sendCheer(to, text){
   S.social.sent=(S.social.sent||0)+1; closeModal(); toast(`💌 ¡Enviado a ${who(to).name}!`); buzz(30); save(); sweep(); loadSocial();
 }
 
+/* ---------- Vídeo de cómo se hace un ejercicio ---------- */
+function exVideoModal(id){
+  const e=ex(id), q=encodeURIComponent(`cómo hacer ${e.name} técnica correcta`);
+  modal(`<div class="row"><div class="emo">${e.emoji}</div><h2 style="margin:0">${esc(e.name)}</h2></div>
+    ${e.video?`<div class="mt" style="aspect-ratio:16/9;border-radius:18px;overflow:hidden;background:#000"><iframe width="100%" height="100%" style="border:0" src="https://www.youtube-nocookie.com/embed/${e.video}" title="Cómo se hace ${esc(e.name)}" allow="encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+      <button class="link mt" style="font-size:13px;color:var(--ink-3)" data-a="changeExVid" data-id="${id}">Cambiar vídeo</button>`
+    :`<p class="muted mt">Mira un vídeo cortito de la técnica antes de empezar 👀</p>
+      <a class="btn lila mt" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">🔎 Buscar vídeos en YouTube</a>
+      <p class="tiny mt2">¿HAS ENCONTRADO UNO QUE TE GUSTA? GUÁRDALO Y SALDRÁ AQUÍ DIRECTAMENTE</p>
+      <div class="row mt" style="gap:6px"><input class="field" id="exVidIn" placeholder="Pega el enlace de YouTube" inputmode="url" autocomplete="off"><button class="btn sm" data-a="saveExVid" data-id="${id}">Guardar</button></div>`}
+    ${SB&&USER?`<button class="btn ghost mt2" data-a="askGlowEx" data-id="${id}">💬 Pregúntale a Glow cómo se hace</button>`:''}`);
+}
+
 /* ---------- "Hoy no me apetece" ---------- */
 const ytId = u => { const m=String(u).match(/(?:youtu\.be\/|[?&]v=|shorts\/|embed\/|live\/)([\w-]{11})/); return m?m[1]:null; };
 function mehModal(){
@@ -857,19 +870,37 @@ function viewHoy(){
 function viewPlan(){
   const p=S.profile;
   const daysHtml=DAYS.filter(d=>p.days.includes(d)).map(d=>{
-    const pl=S.plan[d]||{title:'Entreno',items:[]};
+    const pl=S.plan[d]||{title:'Entreno',items:[]}, open=!!(ui.openDays||{})[d];
+    const mins=Math.round(pl.items.reduce((a,i)=>a+i.sets,0)*2.5);
     return `<div class="card">
-      <div class="row between"><div class="grow"><div class="tiny">${DN[d].toUpperCase()}</div><h2 data-a="renameDay" data-v="${d}" style="cursor:pointer">${esc(pl.title)} <span style="font-size:14px">✏️</span></h2></div>
-      <button class="btn sm ghost" data-a="start" data-v="${d}">▶</button></div>
-      ${pl.items.map((it,i)=>{ const e=ex(it.exId); return `<div class="item"><div class="emo">${e.emoji}</div><div class="grow"><div class="name">${esc(e.name)}</div>
+      <div class="row between"><div class="grow" data-a="toggleDayCard" data-v="${d}" style="cursor:pointer" aria-expanded="${open}"><div class="tiny">${DN[d].toUpperCase()}</div>
+        <h2 style="margin:2px 0">${esc(pl.title)}</h2>
+        <div class="tiny">${pl.items.length} ejercicio${pl.items.length===1?'':'s'} · ~${mins} min · <span style="color:var(--pink-d)">${open?'Ocultar ▴':'Ver ejercicios ▾'}</span></div></div>
+      <button class="btn sm ghost" data-a="start" data-v="${d}" aria-label="Empezar entreno">▶</button></div>
+      ${!open?'':`<button class="link mt" style="font-size:13px" data-a="renameDay" data-v="${d}">✏️ Cambiar nombre</button>`+pl.items.map((it,i)=>{ const e=ex(it.exId); return `<div class="item"><div class="emo">${e.emoji}</div><div class="grow"><div class="name">${esc(e.name)} <button class="link" style="font-size:12px;margin-left:4px" data-a="exVideo" data-id="${e.id}">🎥 cómo se hace</button></div>
         <div class="row mt" style="gap:6px"><div class="stp" style="width:118px"><button data-a="planAdj" data-d="${d}" data-i="${i}" data-f="sets" data-v="-1">−</button><input value="${it.sets}" readonly><span class="u">ser</span><button data-a="planAdj" data-d="${d}" data-i="${i}" data-f="sets" data-v="1">+</button></div>
         <span class="tiny">×</span><div class="stp" style="width:110px"><button data-a="planAdj" data-d="${d}" data-i="${i}" data-f="reps" data-v="${e.kind==='time'?-5:-1}">−</button><input value="${it.reps}" readonly><span class="u">${e.kind==='time'?'s':'rep'}</span><button data-a="planAdj" data-d="${d}" data-i="${i}" data-f="reps" data-v="${e.kind==='time'?5:1}">+</button></div></div></div>
-        <div style="display:flex;flex-direction:column;gap:4px"><button class="x" data-a="planUp" data-d="${d}" data-i="${i}">↑</button><button class="x" data-a="planDel" data-d="${d}" data-i="${i}">✕</button></div></div>`; }).join('')}
-      <button class="btn ghost mt" data-a="addEx" data-v="${d}">＋ Añadir ejercicio</button>
+        <div style="display:flex;flex-direction:column;gap:4px"><button class="x" data-a="planUp" data-d="${d}" data-i="${i}">↑</button><button class="x" data-a="planDel" data-d="${d}" data-i="${i}">✕</button></div></div>`; }).join('')+`
+      <button class="btn ghost mt" data-a="addEx" data-v="${d}">＋ Añadir ejercicio</button>`}
     </div>`;}).join('');
   return `<div class="wrap">${header('Mi plan 🗓️','Toca un día para activarlo o quitarlo')}
     <div class="card"><div class="days">${DAYS.map(x=>`<button class="day ${p.days.includes(x)?'on':''}" data-a="toggleDay" data-v="${x}">${DL[x]}</button>`).join('')}</div></div>
     ${daysHtml || '<div class="card soft center muted">Elige al menos un día arriba ☝️</div>'}
+    <div class="card"><h3>📚 Mis ejercicios</h3><p class="muted">Añade los de tu tabla del gimnasio.</p>
+      <button class="btn lila mt" data-a="library">Ver / crear ejercicios</button></div>
+    <p class="tiny center mt">Tu ciclo, tu cuenta y los ajustes están en <b>Yo → ⚙️ Ajustes</b></p></div>`;
+}
+
+function viewAjustes(){
+  return `<div class="wrap">${header('Ajustes ⚙️')}
+    <div class="card"><h3>👤 Mi cuenta</h3>
+      ${USER?`<p class="muted">${esc(USER.email)}</p><p class="tiny mt" id="syncLabel">${syncLabel()}</p>${ui.sync==='error'&&ui.syncErr?`<p class="tiny" style="word-break:break-word">Detalle: ${esc(ui.syncErr)}</p>`:''}<div class="row mt" style="flex-wrap:wrap;gap:8px"><button class="btn sm ghost" data-a="changePw">🔑 Cambiar contraseña</button><button class="btn sm ghost" data-a="logout">🚪 Cerrar sesión</button></div>`
+      :`<p class="muted">Usando la app sin cuenta: tus datos solo están en este móvil.</p>${CLOUD?`<button class="btn sm mt" data-a="toAuth">☁️ Crear cuenta o entrar</button>`:''}`}
+    </div>
+    <div class="card"><h3>🎛️ Preferencias</h3>
+      <div class="row between mt"><span class="name">Descanso entre series</span><div class="seg" style="width:180px">${[60,90,120].map(s=>`<button class="${S.restSec===s?'on':''}" data-a="restSec" data-v="${s}">${s}s</button>`).join('')}</div></div>
+      <div class="row mt2" style="flex-wrap:wrap;gap:8px"><button class="btn sm ghost" data-a="rename">✏️ Mi nombre</button><button class="btn sm ghost" data-a="export">💾 Copia de seguridad</button><button class="btn sm ghost" data-a="import">📥 Restaurar</button><button class="btn sm ghost" data-a="reset">🗑️ Empezar de cero</button></div>
+    </div>
     <div class="card"><h3>🌙 Mi ciclo</h3>
       ${!cyc().on?`<p class="muted">Desactivado.</p><button class="btn sm lila mt" data-a="cycleSetup">Activar</button>`
       :cyc().hormonal?`<p class="muted">Con anticonceptivos hormonales: usamos tu check-in de energía.</p><button class="btn sm ghost mt" data-a="cycleSetup">✏️ Cambiar</button>`
@@ -882,16 +913,9 @@ function viewPlan(){
       <div class="row mt" style="gap:8px"><input class="field" id="vidIn" placeholder="https://youtube.com/..." inputmode="url" autocomplete="off" style="flex:1"><button class="btn sm" data-a="addVid">＋</button></div>
       ${(S.videos||[]).map((v,i)=>`<div class="item"><img src="https://i.ytimg.com/vi/${v.id}/default.jpg" alt="" style="width:64px;height:48px;object-fit:cover;border-radius:10px"><div class="grow name">Vídeo ${i+1}</div><button class="x" data-a="delVid" data-v="${v.id}">✕</button></div>`).join('')}
     </div>
-    <div class="card"><h3>📚 Mis ejercicios</h3><p class="muted">Añade los de tu tabla del gimnasio.</p>
-      <button class="btn lila mt" data-a="library">Ver / crear ejercicios</button></div>
-    <div class="card"><h3>👤 Mi cuenta</h3>
-      ${USER?`<p class="muted">${esc(USER.email)}</p><p class="tiny mt" id="syncLabel">${syncLabel()}</p>${ui.sync==='error'&&ui.syncErr?`<p class="tiny" style="word-break:break-word">Detalle: ${esc(ui.syncErr)}</p>`:''}<div class="row mt" style="flex-wrap:wrap;gap:8px"><button class="btn sm ghost" data-a="changePw">🔑 Cambiar contraseña</button><button class="btn sm ghost" data-a="logout">🚪 Cerrar sesión</button></div>`
-      :`<p class="muted">Usando la app sin cuenta: tus datos solo están en este móvil.</p>${CLOUD?`<button class="btn sm mt" data-a="toAuth">☁️ Crear cuenta o entrar</button>`:''}`}
-    </div>
-    <div class="card"><h3>⚙️ Ajustes</h3>
-      <div class="row between mt"><span class="name">Descanso entre series</span><div class="seg" style="width:180px">${[60,90,120].map(s=>`<button class="${S.restSec===s?'on':''}" data-a="restSec" data-v="${s}">${s}s</button>`).join('')}</div></div>
-      <div class="row mt2" style="flex-wrap:wrap;gap:8px"><button class="btn sm ghost" data-a="rename">✏️ Mi nombre</button><button class="btn sm ghost" data-a="export">💾 Copia de seguridad</button><button class="btn sm ghost" data-a="import">📥 Restaurar</button><button class="btn sm ghost" data-a="reset">🗑️ Empezar de cero</button></div>
-    </div></div>`;
+    <div class="card"><h3>👯‍♀️ Amigas</h3><div class="row between"><div class="grow"><div class="name">Compartir mi actividad</div><div class="tiny">Tu ciclo y tus fotos nunca se comparten 🔒</div></div>
+      <div class="seg" style="width:120px"><button class="${S.social.share?'on':''}" data-a="shareAct" data-v="1">Sí</button><button class="${!S.social.share?'on':''}" data-a="shareAct" data-v="0">No</button></div></div></div>
+  </div>`;
 }
 
 /* ---------- LOGROS ---------- */
@@ -969,7 +993,7 @@ function viewWorkout(){
     <button class="btn ghost mt" data-a="finish">Terminar aquí ✓</button></div></div>`:''}
   <div class="wrap">
   ${A.entries.map((en,ei)=>{ const e=ex(en.exId), k=e.kind, t2=k!=='weight';
-    return `<div class="card"><div class="row"><div class="emo">${e.emoji}</div><div class="grow"><div class="name">${esc(e.name)}</div><div class="tiny">Objetivo: ${en.sets.length} × ${en.target}${k==='time'?' s':' reps'}</div></div><button class="x" data-a="coachHelp" data-e="${ei}" aria-label="Ayuda con este ejercicio" style="margin-right:6px;background:var(--lila-l)">💬</button><button class="x" data-a="woDelEx" data-e="${ei}">✕</button></div>
+    return `<div class="card"><div class="row"><div class="emo">${e.emoji}</div><div class="grow"><div class="name">${esc(e.name)}</div><div class="tiny">Objetivo: ${en.sets.length} × ${en.target}${k==='time'?' s':' reps'}</div></div><button class="x" data-a="exVideo" data-id="${e.id}" aria-label="Ver vídeo de cómo se hace" style="margin-right:6px;background:var(--pink-l)">🎥</button><button class="x" data-a="coachHelp" data-e="${ei}" aria-label="Ayuda con este ejercicio" style="margin-right:6px;background:var(--lila-l)">💬</button><button class="x" data-a="woDelEx" data-e="${ei}">✕</button></div>
       ${en.hint?`<div class="hint ${en.up?'up':''}">${en.hint}</div>`:''}
       <div class="colh ${t2?'t2':''}"><span>#</span>${k==='weight'?'<span>kg</span><span>reps</span>':k==='time'?'<span>segundos</span>':'<span>reps</span>'}<span>✓</span></div>
       ${en.sets.map((s,si)=>`<div class="set ${t2?'t2':''} ${s.done?'done':''}"><div class="n">${si+1}</div>
@@ -1060,6 +1084,7 @@ function exForm(e, target){
   modal(`<h2>${e?'Editar':'Nuevo'} ejercicio</h2>
     <input class="field" id="exName" placeholder="Nombre (ej: Prensa de piernas)" value="${esc(e?.name||'')}" autocomplete="off">
     <input class="field mt" id="exEmoji" placeholder="Emoji (opcional) 💪" value="${esc(e?.emoji||'')}" maxlength="4" style="width:130px">
+    <input class="field mt" id="exVid" placeholder="🎥 Vídeo de YouTube de cómo se hace (opcional)" value="${e?.video?'https://youtu.be/'+e.video:''}" inputmode="url" autocomplete="off">
     <p class="tiny mt">¿CÓMO SE MIDE?</p><div class="seg mt" id="kindSeg">${kinds.map(k=>`<button class="${ui.form.kind===k[0]?'on':''}" data-a="kind" data-v="${k[0]}">${k[1]}</button>`).join('')}</div>
     <button class="btn mt2" data-a="saveEx" data-id="${e?.id||''}" data-v="${target||''}">Guardar ✨</button>
     ${e?`<button class="link mt2" style="display:block;margin:16px auto 0;color:var(--ink-3)" data-a="delEx" data-id="${e.id}">Borrar ejercicio</button>`:''}`);
@@ -1107,7 +1132,7 @@ function pickPhoto(){
    ACCIONES
    ========================================================= */
 const A = {
-  tab:el=>{ ui.tab=el.dataset.v; if(ui.tab==='logros'||ui.tab==='datos') ui.yoTab=ui.tab; if(ui.tab==='amigas') loadSocial(); render(); scrollTo(0,0); },
+  tab:el=>{ ui.tab=el.dataset.v; if(['logros','datos','ajustes'].includes(ui.tab)) ui.yoTab=ui.tab; if(ui.tab==='amigas') loadSocial(); render(); scrollTo(0,0); },
   authMode:el=>{ const f=$('#authForm'); if(f){ const d=new FormData(f); ui.auth.email=String(d.get('email')||ui.auth.email); if(d.has('name')) ui.auth.name=String(d.get('name')); } ui.auth.mode=el.dataset.v; ui.auth.err=''; ui.auth.msg=''; render(); },
   authShow:el=>{ const i=$('#pwIn'); if(!i) return; const show=i.type==='password'; i.type=show?'text':'password'; el.textContent=show?'🙈':'👁️'; },
   localMode:()=>{ try{ localStorage.setItem('glowfit-localmode','1'); }catch(e){} enterLocal(); },
@@ -1125,6 +1150,11 @@ const A = {
   ciEnergy:el=>{ ui.ci.energy=el.dataset.v; if(el.dataset.v==='low' || ui.ci.sym.length>=2){ ui.ci.step=2; ciRender(); } else A.ciGo({dataset:{v:'normal'}}); },
   ciGo:el=>{ const c=ui.ci; startWorkout(c.day, {...c.o, energy:c.energy||null, symptoms:c.sym, soft:c.o.soft||el.dataset.v==='soft'}); },
   meh:()=>mehModal(),
+  toggleDayCard:el=>{ ui.openDays=ui.openDays||{}; ui.openDays[el.dataset.v]=!ui.openDays[el.dataset.v]; render(); },
+  exVideo:el=>exVideoModal(el.dataset.id),
+  saveExVid:el=>{ const id=ytId($('#exVidIn')?.value||''); if(!id){ toast('Pega un enlace de YouTube 🎬'); return; } ex(el.dataset.id).video=id; save(); exVideoModal(el.dataset.id); toast('🎥 ¡Vídeo guardado para este ejercicio!'); },
+  changeExVid:el=>{ delete ex(el.dataset.id).video; save(); exVideoModal(el.dataset.id); },
+  askGlowEx:el=>{ const e=ex(el.dataset.id); closeModal(); if(S.active){ ui.woCoach=true; } ui.tab='coach'; render(); coachSend(`¿Cómo se hace bien "${e.name}"? Explícamelo paso a paso.`); },
   socReload:()=>{ ui.soc={...(ui.soc||{}),loaded:false}; render(); loadSocial(); },
   shareCode:async()=>{ const c=ui.soc.me.code, t=`¡Entrena conmigo en GirlGym! 💖 Añádeme con mi código: ${c}`;
     try{ if(navigator.share){ await navigator.share({title:'GirlGym', text:t, url:appUrl()}); return; } }catch(e){ return; }
@@ -1197,7 +1227,8 @@ const A = {
   editEx:el=>exForm(ex(el.dataset.id)),
   kind:el=>{ ui.form.kind=el.dataset.v; document.querySelectorAll('#kindSeg button').forEach(b=>b.classList.toggle('on',b.dataset.v===ui.form.kind)); },
   saveEx:el=>{ const name=$('#exName').value.trim(); if(!name){ toast('Ponle un nombre 💖'); return; } const emoji=$('#exEmoji').value.trim()||'💪';
-    let id=el.dataset.id; if(id){ Object.assign(ex(id),{name,emoji,kind:ui.form.kind}); } else { id='c'+uid(); S.exercises.push({id,name,emoji,kind:ui.form.kind}); }
+    const vraw=($('#exVid')?.value||'').trim(), video=ytId(vraw); if(vraw&&!video){ toast('Ese enlace no es de YouTube 🎬'); return; }
+    let id=el.dataset.id; if(id){ Object.assign(ex(id),{name,emoji,kind:ui.form.kind,video:video||undefined}); } else { id='c'+uid(); S.exercises.push({id,name,emoji,kind:ui.form.kind,video:video||undefined}); }
     save(); const t=el.dataset.v; if(t){ A.pickEx({dataset:{v:t,id}}); } else { libraryModal(''); toast('✨ Guardado'); } },
   delEx:el=>{ if(!confirm('¿Borrar este ejercicio? Tu historial se mantiene.')) return; S.exercises=S.exercises.filter(e=>e.id!==el.dataset.id); for(const d in S.plan) S.plan[d].items=S.plan[d].items.filter(i=>i.exId!==el.dataset.id); save(); libraryModal(''); render(); },
   restSec:el=>{ S.restSec=+el.dataset.v; save(); render(); },
