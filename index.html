@@ -666,9 +666,9 @@ function viewAmigas(){
       <div class="row mt" style="gap:8px"><button class="btn sm" data-a="acceptF" data-v="${f.fid}">Aceptar 💖</button><button class="btn sm ghost" data-a="removeF" data-v="${f.fid}">Ahora no</button></div></div>`).join('')}
     <div class="card"><div class="row between"><div><div class="tiny">TU CÓDIGO DE AMIGA</div><div class="f" style="font-size:28px;letter-spacing:3px;color:var(--pink-d)">${s.me.code}</div></div><button class="emo" style="font-size:28px;width:52px;height:52px" data-a="avatar" aria-label="Cambiar avatar">${s.me.emoji}</button></div>
       <div class="row mt" style="gap:8px"><button class="btn sm lila" data-a="shareCode">📤 Invitar amiga</button><button class="btn sm ghost" data-a="addFriend">＋ Añadir con código</button></div></div>
-    ${acc.length?`<div class="card"><h3>Mis amigas</h3>${acc.map(f=>{ const n=s.posts.filter(p=>p.user_id===f.id&&p.kind==='workout'&&Date.parse(p.created_at)>=wk).length; return `<div class="item"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">${n?`💪 ${n} entreno${n>1?'s':''} esta semana`:'Aún sin entrenos esta semana'}</div></div><button class="btn sm" data-a="cheerTo" data-v="${f.id}">💌 Ánimo</button></div>`; }).join('')}
-      ${out.length?`<p class="tiny mt">Pendientes: ${out.map(f=>esc(f.name)).join(', ')}</p>`:''}</div>`
-    :`<div class="card soft center"><span class="big-emo">💌</span><p class="muted">Invita a tus amigas con tu código y os iréis animando 💖</p>${out.length?`<p class="tiny mt">Esperando a: ${out.map(f=>esc(f.name)).join(', ')}</p>`:''}</div>`}
+    ${acc.length?`<div class="card"><h3>Mis amigas</h3>${acc.map(f=>{ const n=s.posts.filter(p=>p.user_id===f.id&&p.kind==='workout'&&Date.parse(p.created_at)>=wk).length; return `<div class="item"><button class="emo" data-a="friendMenu" data-v="${f.fid}" aria-label="Opciones de ${esc(f.name)}">${f.emoji}</button><div class="grow" data-a="friendMenu" data-v="${f.fid}" style="cursor:pointer"><div class="name">${esc(f.name)} <span class="tiny">⋯</span></div><div class="tiny">${n?`💪 ${n} entreno${n>1?'s':''} esta semana`:'Aún sin entrenos esta semana'}</div></div><button class="btn sm" data-a="cheerTo" data-v="${f.id}">💌 Ánimo</button></div>`; }).join('')}
+      ${out.map(f=>`<div class="item"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">⏳ Solicitud enviada</div></div><button class="btn sm ghost" data-a="cancelF" data-v="${f.fid}">Cancelar</button></div>`).join('')}</div>`
+    :`<div class="card soft center"><span class="big-emo">💌</span><p class="muted">Invita a tus amigas con tu código y os iréis animando 💖</p></div>${out.length?`<div class="card"><h3>Solicitudes enviadas</h3>${out.map(f=>`<div class="item"><div class="emo">${f.emoji}</div><div class="grow"><div class="name">${esc(f.name)}</div><div class="tiny">⏳ Solicitud enviada</div></div><button class="btn sm ghost" data-a="cancelF" data-v="${f.fid}">Cancelar</button></div>`).join('')}</div>`:''}`}
     <div class="card" style="background:linear-gradient(135deg,#FF7DB4,#C49BFF);color:#fff"><div class="tiny" style="color:#fff">PREGUNTA DE LA SEMANA</div><h2 style="margin-top:4px">${curQ()}</h2>
       ${myAns?`<p class="mt" style="opacity:.95">Tu respuesta: <b>${esc(myAns.text)}</b></p>`:`<form id="answerForm" class="row mt" style="gap:6px"><input class="field" name="t" placeholder="Tu respuesta…" maxlength="300" autocomplete="off"><button class="btn sm white" type="submit">➤</button></form>`}</div>
     ${ans.map(postHtml).join('')}
@@ -1132,6 +1132,15 @@ const A = {
     <form id="friendForm" class="mt2"><input class="field center" name="c" placeholder="ABC123" maxlength="6" autocapitalize="characters" autocomplete="off" style="font-size:24px;letter-spacing:4px;text-transform:uppercase"><button class="btn mt" type="submit">Enviar solicitud 💌</button></form>`),
   acceptF:async el=>{ const r=await SB.from('friendships').update({status:'accepted'}).eq('id',el.dataset.v); if(r.error){ toast('⚠️ No se pudo aceptar'); return; } confetti(30); toast('👯‍♀️ ¡Ya sois amigas!'); await loadSocial(); },
   removeF:async el=>{ await SB.from('friendships').delete().eq('id',el.dataset.v); loadSocial(); },
+  cancelF:async el=>{ if(!confirm('¿Cancelar la solicitud?')) return; await SB.from('friendships').delete().eq('id',el.dataset.v); toast('Solicitud cancelada'); loadSocial(); },
+  friendMenu:el=>{ const f=ui.soc.friends.find(x=>x.fid===el.dataset.v); if(!f) return;
+    modal(`<div class="center"><span class="big-emo">${f.emoji}</span><h2>${esc(f.name)}</h2><p class="muted">Amigas en GirlGym 👯‍♀️</p></div>
+      <button class="btn mt2" data-a="cheerTo" data-v="${f.id}">💌 Mandarle ánimo</button>
+      <button class="btn ghost mt" data-a="unfriend" data-v="${f.fid}">Dejar de seguir</button>
+      <p class="tiny center mt">Si dejas de seguirla, ninguna de las dos verá ya la actividad de la otra. Ella no recibe ningún aviso.</p>`); },
+  unfriend:async el=>{ const f=ui.soc.friends.find(x=>x.fid===el.dataset.v); if(!f||!confirm(`¿Dejar de seguir a ${f.name}?`)) return;
+    const r=await SB.from('friendships').delete().eq('id',f.fid); if(r.error){ toast('⚠️ No se pudo'); return; }
+    closeModal(); toast(`Has dejado de seguir a ${f.name}`); loadSocial(); },
   cheerTo:el=>cheerModal(el.dataset.v),
   sendCheer:el=>sendCheer(el.dataset.v, el.dataset.t),
   readCheer:async el=>{ const c=ui.soc.cheers.find(x=>x.id===el.dataset.v); if(c) c.read_at=new Date().toISOString(); render(); await SB.from('cheers').update({read_at:new Date().toISOString()}).eq('id',el.dataset.v); },
